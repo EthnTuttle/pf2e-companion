@@ -8,6 +8,11 @@ Cross-platform PF2e Remaster + Christian Biblical worldview reference & worldbui
 
 ## What works
 
+### Tier 1 — first-run wizard (done)
+- **`/onboarding`** (3 screens: vault location → lens pick → optional LLM) shows only on a genuine first run — no settings.json and no campaigns in the default vault. Existing installs are auto-migrated and never see it.
+- **Relocatable vault**: pick (or type) a custom vault folder in the wizard and the app restarts once to re-point the watcher; search drops old-root entities (the SQLite index is derived and cleared on the vault change). The setting lives at `<app_data>/settings.json` — hand-rolled, atomic write.
+- **Lens persistence**: the lens picked in the wizard — or changed in the topbar picker — survives relaunch (`localStorage`).
+
 ### Phase 0 — scaffold (done)
 - Tauri 2 + SvelteKit + TypeScript skeleton.
 - SQLite schema, FTS5, sqlite-vec extension registered via `sqlite3_auto_extension`.
@@ -197,6 +202,7 @@ Full spec: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2
 
 ## Run your first game
 
+0. **First run**: the `/onboarding` wizard sets your vault folder, lens, and (optionally) an LLM provider. Skip it and sane defaults apply — it never shows again.
 1. **Host**: Open `/table` in the Tauri app. Enter your name, pick a color, choose a campaign (create one in `/vault` if needed), optionally pick "The Widow's Lamp" adventure, click **Host Session**.
 2. **Share**: The lobby shows a **P2P Ticket** (desktop peers), a **LAN URL** (mobile), and a **Table PIN** (6 chars, required for LAN joins). Copy and send the appropriate invite.
 3. **Join**: Desktop peers paste the ticket on `/table` → **Join Session**. Mobile users open the LAN URL (e.g., `ws://192.168.1.42:4780/abc123?pin=ABC123`) in browser or Tauri Android/iOS app.

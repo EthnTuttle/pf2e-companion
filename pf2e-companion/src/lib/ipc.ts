@@ -496,3 +496,28 @@ export interface DiagnosticsInfo {
  * user pastes it.
  */
 export const diagnosticsGet = () => invoke<DiagnosticsInfo>("diagnostics_get");
+
+// === First-run wizard (SHIPPING Tier 1 item 6) ==========================
+
+export interface WizardStatus {
+  needed: boolean;
+  /** Default vault location, shown on the wizard's first screen. */
+  default_vault: string;
+}
+
+export interface WizardCompleteResult {
+  restart_required: boolean;
+}
+
+export const wizardStatus = () => invoke<WizardStatus>("wizard_status");
+
+/** Validate a candidate vault folder; resolves to the normalized path. */
+export const wizardValidateVault = (path: string) =>
+  invoke<string>("wizard_validate_vault", { path });
+
+/** Persist the wizard outcome. `vaultPath` null = keep the default vault. */
+export const wizardComplete = (vaultPath: string | null) =>
+  invoke<WizardCompleteResult>("wizard_complete", { vaultPath });
+
+/** Fire-and-forget — the process exits before this resolves. */
+export const appRestart = () => invoke<void>("app_restart");

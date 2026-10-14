@@ -230,6 +230,26 @@ fn delete_by_path(path: &Path, vault_root: &Path, db: &Db) -> Result<()> {
     Ok(())
 }
 
+/// Drop every vault-sourced row (+ its FTS entry) from the derived index.
+/// Used at startup when the vault root changed since the previous launch —
+/// the old root's rows would otherwise linger in search. Reference/plugin
+/// rows are untouched.
+pub fn clear_vault_index(db: &Db) {
+    let conn = db.conn.lock().unwrap();
+    let res = (|| -> Result<()> {
+        conn.execute(
+            "DELETE FROM entities_fts
+             WHERE rowid IN (SELECT rowid FROM entities WHERE source = 'vault')",
+            [],
+        )?;
+        conn.execute("DELETE FROM entities WHERE source = 'vault'", [])?;
+        Ok(())
+    })();
+    if let Err(e) = res {
+        tracing::warn!(error = %e, "failed to clear vault index");
+    }
+}
+
 fn parse_file(path: &Path, vault_root: &Path) -> Result<Parsed> {
     let raw = std::fs::read_to_string(path)
         .with_context(|| format!("reading {}", path.display()))?;

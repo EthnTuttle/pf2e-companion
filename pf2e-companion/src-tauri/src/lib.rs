@@ -28,7 +28,8 @@ pub mod net;
 pub mod rag;
 pub mod rules;
 pub mod session;
-mod vault;
+pub mod settings;
+pub mod vault;
 mod vault_write;
 
 use std::sync::Arc;
@@ -67,6 +68,25 @@ pub fn run() {
             let db_arc = Arc::new(db);
             app.manage(db_arc.clone());
 
+            // Tier 1 first-run wizard — settings sit between the DB open and
+            // the vault watcher: the vault root this launch uses comes from
+            // here. `load_or_migrate` is infallible (defaults on every error
+            // path) so a corrupt settings.json can't kill the app at startup.
+            let mut settings = settings::load_or_migrate(&app_data);
+            let vault_root = settings::effective_vault(&app_data, &settings);
+
+            // Vault changed since last launch → the derived SQLite index
+            // still holds the old root's rows; clear the vault-sourced ones
+            // (reference rows stay) so search can't return stale entities.
+            if settings.last_run_vault.as_ref() != Some(&vault_root) {
+                vault::clear_vault_index(&db_arc);
+                settings.last_run_vault = Some(vault_root.clone());
+                if let Err(e) = settings::save(&app_data, &settings) {
+                    tracing::warn!(error = %e, "failed to persist last_run_vault");
+                }
+            }
+            app.manage(Arc::new(settings));
+
             // Phase 6 § B — LLM is off by default. The registry is created
             // unconfigured; `commands::llm_configure` populates it on user
             // opt-in.
@@ -75,14 +95,17 @@ pub fn run() {
             // Phase 10 — Live Table. One active session per process.
             app.manage(Arc::new(session::SessionRegistry::new()));
 
-            let vault_root = app_data.join("vault");
             std::fs::create_dir_all(&vault_root).ok();
             app.manage(Arc::new(vault_write::VaultRoot(vault_root.clone())));
-            if let Err(e) = vault::spawn(vault_root, db_arc.clone()) {
+            if let Err(e) = vault::spawn(vault_root.clone(), db_arc.clone()) {
                 tracing::error!(error = %e, "failed to start vault watcher");
             }
 
-            tracing::info!(db = %db_path.display(), "pf2e-companion ready");
+            tracing::info!(
+                db = %db_path.display(),
+                vault = %vault_root.display(),
+                "pf2e-companion ready"
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -122,6 +145,10 @@ pub fn run() {
             commands::session_list_saved,
             commands::session_export_log,
             commands::diagnostics_get,
+            commands::wizard_status,
+            commands::wizard_validate_vault,
+            commands::wizard_complete,
+            commands::app_restart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

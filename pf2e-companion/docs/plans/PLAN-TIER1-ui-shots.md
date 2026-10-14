@@ -94,9 +94,9 @@ live host.
 
 ## 2. Implementation steps
 
-All paths relative to `pf2e-companion/` (project root; git root is one level
-up). Node is `~/.nvm/versions/node/v24.12.0/bin` (type-stripping is default
-on, so `node e2e/*.ts` runs directly — no tsx dep).
+Paths relative to `pf2e-companion/` (project root; git root one level up).
+Node is `~/.nvm/versions/node/v24.12.0/bin` (type-stripping default-on, so
+`node e2e/*.ts` runs directly — no tsx dep).
 
 ### Step 1 — devDependency: `@playwright/test` (~1 line)
 
@@ -154,18 +154,16 @@ Effort: ~1.5 h including manual boot verification.
 
 ### Step 3 — `e2e/fixtures.ts` (new, ~280 lines)
 
-Typed fixture map keyed by command name, every shape imported from
-`$lib/ipc` (`import type { ... } from "../src/lib/ipc"`) so drift from the
-real bindings is a type error. Grounded in `src-tauri/src/commands.rs` shapes.
-
-Exported as **`base` + named variants** (`default`, `wizardFresh`,
-`chatConfigured`) — the runner picks one per matrix row and injects only that
-map. `default` is the union below with `wizard_status.needed === false`;
-`wizardFresh` = `{ ...base, wizard_status: { needed: true, … } }`;
-`chatConfigured` = `{ ...base, llm_status: { configured: true, provider:
-"ollama", model: "qwen3:4b", key_present: false } }` (matches the honest
-Ollama-configured state of `/settings/llm`'s default flow — the chat page
-gates sending on `llmState.status?.configured`, `chat/+page.svelte:71-74`).
+Typed fixture map keyed by command name, shapes imported from `$lib/ipc`
+(`import type { ... } from "../src/lib/ipc"`) so drift from the real bindings
+is a type error. Exported as **`base` + named variants** (`default`,
+`wizardFresh`, `chatConfigured`) — the runner picks one per matrix row and
+injects only that map. `default` is the union below with
+`wizard_status.needed === false`; `wizardFresh` = `{ ...base, wizard_status:
+{ needed: true, … } }`; `chatConfigured` = `{ ...base, llm_status:
+{ configured: true, provider: "ollama", model: "qwen3:4b", key_present:
+false } }` — the chat page gates sending on `llmState.status?.configured`
+(`chat/+page.svelte:71-74`).
 
 | Command | Fixture (all timestamps fixed epoch `T0 = 1_760_000_000_000`) |
 |---|---|
@@ -256,8 +254,8 @@ Effort: ~2.5 h (was 1.5; wizard flow + chat replay).
    verified in `@sveltejs/kit`'s preview middleware (non-prerendered paths
    fall through to the server handler, which with `ssr = false` + adapter
    `fallback: index.html` returns the SPA shell). Gate step 0: `curl -s
-   localhost:4173/table/play` returns shell HTML; if it ever 404s, fallback =
-   `goto("/")` then client-side navigation via tabbar links.
+   localhost:4173/table/play` returns shell HTML; if it 404s, fallback =
+   `goto("/")` + client-side navigation via tabbar links.
 3. `chromium.launch({ headless: true, args: ["--hide-scrollbars", "--force-color-profile=srgb", "--font-render-hinting=none"] })`.
 4. **Startup assertion (hard fail before any browser work)**:
    `fixtures.variants.default["wizard_status"].needed === false` — guards
@@ -267,11 +265,11 @@ Effort: ~2.5 h (was 1.5; wizard flow + chat replay).
    selector + `networkidle` + 300 ms settle, then
    `page.screenshot({ fullPage: true })`.
 6. Write `shots/<route-slug>/<viewport>-<theme>.png` and accumulate
-   `shots/manifest.json`: `{ generatedBy: "pnpm e2e:shots", node, playwright,
-   routes: [{ route, variant?, viewport, theme, file, setup, readySelector,
-   notes }] }` — an agent enumerates surfaces from the manifest, no globbing.
-   The chat-reply rows carry `notes: "stubbed-backend: llm:token replay"`;
-   play rows carry `notes: "fixture-snapshot"`.
+   `shots/manifest.json`: `{ generatedBy, node, playwright, routes: [{ route,
+   variant?, viewport, theme, file, setup, readySelector, notes }] }` — an
+   agent enumerates surfaces from the manifest, no globbing. Chat-reply rows
+   carry `notes: "stubbed-backend: llm:token replay"`; play rows carry
+   `notes: "fixture-snapshot"`.
 7. Collect `pageerror` + `console.error` per context → print a per-route
    summary; **any error fails the run (exit 1)**; otherwise exit 0.
 
