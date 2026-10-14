@@ -2,7 +2,7 @@
 
 Cross-platform PF2e Remaster + Christian Biblical worldview reference & worldbuilding companion. Tauri 2 + SvelteKit + SQLite (FTS5 + sqlite-vec).
 
-> **Status**: Phase 11 — Live Table (real-time multiplayer) + second adventure + a11y cleanup.
+> **Status**: Phase 15 — Phase 12–15 friends-beta slices shipped (log export, diagnostics, first-run wizard, UI screenshot harness). Handoff state: `docs/STATUS.md`.
 > Shipping roadmap to a broadly-playable release: `docs/SHIPPING.md`.
 > Plan: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2e-biblical-reference-2026-05-25.md`.
 
