@@ -1,0 +1,5 @@
+# These are supported funding model platforms
+
+# Development tips via Lightning (LNURL-pay endpoint for average@minibits.cash).
+# Kept out of the app itself — see docs/research/nostr-integration-analysis.md.
+custom: ['https://minibits.cash/.well-known/lnurlp/average']
