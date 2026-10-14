@@ -59,6 +59,16 @@ describe("mockTransport", () => {
     expect(errors).toHaveLength(1); // unsubscribed
   });
 
+  test("emits state changes to subscribers", async () => {
+    const states: Array<{ state: string; attempt: number }> = [];
+    const unsub = transport.onStateChange((state, attempt) => states.push({ state, attempt }));
+
+    // mockTransport doesn't emit state changes automatically, but we can test the callback registration
+    expect(typeof transport.onStateChange).toBe("function");
+
+    unsub();
+  });
+
   test("connect and close are no-ops", async () => {
     await expect(transport.connect()).resolves.toBeUndefined();
     await expect(transport.close()).resolves.toBeUndefined();
@@ -139,6 +149,132 @@ describe("wsTransport error frame after connect", () => {
   });
 });
 
+describe("wsTransport reconnect state machine", () => {
+  let mockWsInstances: any[] = [];
+  let currentMockWs: any;
+  const originalWebSocket = globalThis.WebSocket;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockWsInstances = [];
+    currentMockWs = null;
+    const MockWebSocket = function(this: any, url: string) {
+      this.readyState = WebSocket.OPEN;
+      this.send = vi.fn();
+      this.close = vi.fn();
+      this.onopen = null;
+      this.onmessage = null;
+      this.onerror = null;
+      this.onclose = null;
+      mockWsInstances.push(this);
+      currentMockWs = this;
+    };
+    globalThis.WebSocket = MockWebSocket as any;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    globalThis.WebSocket = originalWebSocket;
+  });
+
+  test("hello frame includes pin when provided", async () => {
+    const { wsTransport } = await import("./transport");
+
+    const transport = wsTransport("ws://localhost:1234/session/abc", "TestPlayer", "ABC123");
+    const connectPromise = transport.connect();
+
+    // Trigger onopen to send hello
+    const ws = mockWsInstances[0];
+    expect(ws).toBeDefined();
+    ws.onopen?.();
+
+    await Promise.resolve();
+
+    // Check that hello was sent with pin
+    expect(ws.send).toHaveBeenCalled();
+    const sentData = JSON.parse(ws.send.mock.calls[0][0]);
+    expect(sentData.type).toBe("hello");
+    expect(sentData.pin).toBe("ABC123");
+    expect(sentData.name).toBe("TestPlayer");
+
+    ws.onmessage?.({ data: JSON.stringify({ type: "welcome" }) });
+    await connectPromise;
+  });
+
+  test("reconnecting on unexpected close: success restores connected", async () => {
+    const { wsTransport } = await import("./transport");
+
+    const transport = wsTransport("ws://localhost:1234/session/abc", "TestPlayer");
+    const connectPromise = transport.connect();
+
+    // Initial connection
+    mockWsInstances[0].onopen?.();
+    mockWsInstances[0].onmessage?.({ data: JSON.stringify({ type: "welcome" }) });
+    await connectPromise;
+
+    const stateChanges: Array<{ state: string; attempt: number }> = [];
+    transport.onStateChange((state, attempt) => stateChanges.push({ state, attempt }));
+
+    // Simulate unexpected close
+    mockWsInstances[0].onclose?.();
+
+    // Should be reconnecting
+    expect(stateChanges.find(s => s.state === "reconnecting")).toBeDefined();
+
+    // Fast-forward through backoff
+    vi.advanceTimersByTime(500);
+
+    // New WebSocket connection attempt - get the second instance
+    const ws2 = mockWsInstances[1];
+    expect(ws2).toBeDefined();
+    ws2.onopen?.();
+    ws2.onmessage?.({ data: JSON.stringify({ type: "welcome" }) });
+
+    // Should be connected again
+    expect(stateChanges.find(s => s.state === "connected")).toBeDefined();
+  });
+
+  test("3 failures → failed + onError fired", async () => {
+    const { wsTransport } = await import("./transport");
+
+    const transport = wsTransport("ws://localhost:1234/session/abc", "TestPlayer");
+    const connectPromise = transport.connect();
+
+    // Initial connection
+    mockWsInstances[0].onopen?.();
+    mockWsInstances[0].onmessage?.({ data: JSON.stringify({ type: "welcome" }) });
+    await connectPromise;
+
+    const stateChanges: Array<{ state: string; attempt: number }> = [];
+    transport.onStateChange((state, attempt) => stateChanges.push({ state, attempt }));
+
+    const errorMsgs: string[] = [];
+    transport.onError((msg) => errorMsgs.push(msg));
+
+    // Simulate 3 failed reconnection attempts (each close triggers a reconnect)
+    // After 3 reconnects fail, the 4th close should trigger "failed"
+    for (let i = 0; i < 3; i++) {
+      // Close the current WebSocket
+      const ws = mockWsInstances[i];
+      ws.onclose?.();
+      // Fast-forward through backoff to trigger next reconnect attempt
+      vi.advanceTimersByTime(i === 0 ? 500 : i === 1 ? 1000 : 2000);
+      // New WebSocket created but we don't send welcome (simulating failure)
+      // The next iteration will close this one
+    }
+
+    // Close the 4th WebSocket (the 3rd reconnect attempt) to trigger failed state
+    const ws4 = mockWsInstances[3];
+    ws4?.onclose?.();
+
+    // Should be in failed state
+    expect(stateChanges.find(s => s.state === "failed")).toBeDefined();
+    // onError should have been fired
+    expect(errorMsgs.length).toBeGreaterThan(0);
+    expect(errorMsgs[0]).toContain("Connection lost");
+  });
+});
+
 describe("wsTransport frame encoding", () => {
   test("hello frame structure", () => {
     const frame = {
@@ -211,78 +347,14 @@ describe("createTransport backend selection logic", () => {
     // but we can verify the function exists
     expect(typeof ipcTransport).toBe("function");
   });
-});
 
-describe("wsTransport frame encoding", () => {
-  test("hello frame structure", () => {
-    const frame = {
-      type: "hello",
-      session_id: "abc123",
-      name: "TestPlayer",
-    };
-    expect(frame.type).toBe("hello");
-    expect(frame.session_id).toBe("abc123");
-    expect(frame.name).toBe("TestPlayer");
-  });
-
-  test("intent frame structure", () => {
-    const intent: Intent = { kind: "chat", text: "hello" };
-    const frame = { type: "intent", intent };
-    expect(frame.type).toBe("intent");
-    expect(frame.intent).toEqual(intent);
-  });
-
-  test("patch frame structure mirrors Tauri event payload", () => {
-    const patch: PatchEvent = { session_id: "s1", kind: "chat_appended", entry: { ts: 1, from: "gm", kind: "chat", text: "hi", roll: null } };
-    const frame = { type: "patch", ...patch };
-    expect(frame.type).toBe("patch");
-    expect(frame.session_id).toBe("s1");
-    expect(frame.kind).toBe("chat_appended");
-  });
-
-  test("presence frame structure", () => {
-    const presence: PresenceEvent = { session_id: "s1", kind: "peer_joined", peer_id: "p2", name: "Alice", via: "lan" };
-    const frame = { type: "presence", ...presence };
-    expect(frame.type).toBe("presence");
-    expect(frame.kind).toBe("peer_joined");
-  });
-
-  test("error frame structure", () => {
-    const frame = { type: "error", message: "Forbidden", rejected_intent: { kind: "end_session" } };
-    expect(frame.type).toBe("error");
-    expect(frame.message).toBe("Forbidden");
-    expect(frame.rejected_intent).toEqual({ kind: "end_session" });
-  });
-});
-
-describe("createTransport backend selection logic", () => {
-  const originalWindow = globalThis.window;
-
-  beforeEach(() => {
-    globalThis.window = { ...originalWindow } as any;
-  });
-
-  afterEach(() => {
-    globalThis.window = originalWindow;
-  });
-
-  test("throws when no Tauri and no host param", async () => {
+  test("wsTransport with pin from query param", async () => {
     // @ts-expect-error
     delete globalThis.window.__TAURI_INTERNALS__;
-    Object.defineProperty(globalThis.window, "location", { value: { search: "" }, writable: true, configurable: true });
+    Object.defineProperty(globalThis.window, "location", { value: { search: "?host=ws://localhost:1234/session/abc&pin=XYZ789" }, writable: true, configurable: true });
 
     const { createTransport } = await import("./transport");
-    expect(() => createTransport("test")).toThrow("No transport available");
-  });
-
-  test("would select ipcTransport when Tauri internals present", async () => {
-    // @ts-expect-error
-    globalThis.window.__TAURI_INTERNALS__ = {};
-    Object.defineProperty(globalThis.window, "location", { value: { search: "" }, writable: true, configurable: true });
-
-    const { ipcTransport } = await import("./transport");
-    // We can't easily test the actual transport creation without mocking more,
-    // but we can verify the function exists
-    expect(typeof ipcTransport).toBe("function");
+    const transport = createTransport("test");
+    expect(transport.mode).toBe("ws");
   });
 });

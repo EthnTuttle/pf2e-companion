@@ -185,6 +185,50 @@ fn player_secret_roll_is_stripped() {
     assert!(doc.take_last_roll().is_none());
 }
 
+// === Chat seq (CONTRACT-10_5 § 3) ========================================
+
+#[test]
+fn chat_seq_monotonic_and_survives_save_load() {
+    let mut doc = SessionDoc::new_session(meta());
+    // Two rolls on the same tick: both kept, distinct monotonic seqs,
+    // and the seqs are distributed in the derived patches.
+    let e1 = gm(&mut doc, Intent::RollDice { expr: "1d20".into(), secret: false });
+    let e2 = gm(&mut doc, Intent::RollDice { expr: "1d20".into(), secret: false });
+    match (&e1[0], &e2[0]) {
+        (
+            PatchEventPayload::ChatAppended { entry: a },
+            PatchEventPayload::ChatAppended { entry: b },
+        ) => {
+            assert_eq!(a.seq, Some(1), "first entry gets seq 1");
+            assert_eq!(b.seq, Some(2), "second entry gets seq 2");
+        }
+        other => panic!("expected ChatAppended patches, got {other:?}"),
+    }
+    let snap = doc.snapshot().unwrap();
+    assert_eq!(snap.chat.len(), 2, "same-tick entries both kept");
+    assert_eq!(
+        snap.chat.iter().map(|e| e.seq).collect::<Vec<_>>(),
+        vec![Some(1), Some(2)],
+        "seqs are monotonic in the snapshot"
+    );
+
+    // Reload: seqs persist and the counter continues.
+    let mut loaded = SessionDoc::load(&doc.save()).unwrap();
+    let snap = loaded.snapshot().unwrap();
+    assert_eq!(
+        snap.chat.iter().map(|e| e.seq).collect::<Vec<_>>(),
+        vec![Some(1), Some(2)],
+        "seqs survive save/load"
+    );
+    let e3 = gm(&mut loaded, Intent::Chat { text: "after reload".into() });
+    match &e3[0] {
+        PatchEventPayload::ChatAppended { entry } => {
+            assert_eq!(entry.seq, Some(3), "counter continues after reload");
+        }
+        other => panic!("expected ChatAppended, got {other:?}"),
+    }
+}
+
 // === apply_intent → PatchEvent mapping for every § 3 variant ==========
 
 #[test]

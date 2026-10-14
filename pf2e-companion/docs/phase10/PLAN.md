@@ -87,12 +87,20 @@ Known v1 limitations (next phase candidates):
    identity. Acceptable for trusted-LAN v1; add a PIN/token auth next.
 2. Re-hosting a second session in the same process may serve LAN on an
    ephemeral port instead of 4780 (advertised `lan_url` is correct).
-3. Chat dedupe keys on (ts, from, text) — two identical rolls in the same
-   millisecond collapse. Include roll total/seq in the key next phase.
+3. Chat dedupe keys on (seq, from) composite (fixed in 10.5 — was (ts, from, text)).
 4. Secret GM rolls: totals are host-ack-only (not in the doc), but the roll
    *event* is visible. Suffices v1.
 5. iroh sync verified on loopback only (`PF2E_NET_TESTS=1`); WAN/relay play
    and real Android/iOS devices untested in this session.
+
+## Post-review status — Phase 10.5 hardening (2026-10-14) — SHIPPED
+
+LAN join PIN (name-reattach requires it), awaited session teardown binding
+(port 4780 reusable in-process), chat `seq` + (seq,from) dedupe, WS pings,
+auto-reconnect with backoff + manual Rejoin, a11y warnings zeroed in all
+phase-10 files. Remaining notes: LAN PIN is a shared secret (hostile-LAN
+spoofing still possible — fine for home tables); never put `?pin=` in URLs
+(browser history leaks); typed entry only.
 
 ## Agent tasking (3 agents, distinct models)
 

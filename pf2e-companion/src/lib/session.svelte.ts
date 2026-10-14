@@ -7,6 +7,9 @@ export const sessionState = $state({
   presence: [] as string[],
   connected: false,
   error: null as string | null,
+  connectionState: "offline" as "offline" | "connecting" | "connected" | "reconnecting" | "failed",
+  reconnectAttempt: 0,
+  transport: null as { retryConnection: () => Promise<void>; close: () => Promise<void> } | null,
 });
 
 /** Apply a single PatchEvent to the session snapshot (reducer). */
@@ -25,6 +28,7 @@ export function applyPatch(patch: PatchEvent): void {
       sessionState.snapshot = null;
       sessionState.info = null;
       sessionState.connected = false;
+      sessionState.connectionState = "offline";
       return;
   }
 
@@ -42,13 +46,14 @@ export function applyPatch(patch: PatchEvent): void {
       sessionState.snapshot = patch.snapshot;
       break;
     case "chat_appended":
-      // Dedupe: skip if an entry with same (ts, from, text) already exists
-      const exists = snap.chat.some(
-        (e) => e.ts === patch.entry.ts && e.from === patch.entry.from && e.text === patch.entry.text
-      );
-      if (!exists) {
-        snap.chat.push(patch.entry);
-        snap.chat.sort((a, b) => a.ts - b.ts);
+      // Dedupe: prefer (seq, from) when seq present, fallback to legacy (ts,from,text)
+      const entry = patch.entry;
+      const dup = entry.seq != null
+        ? snap.chat.some((e) => e.seq === entry.seq && e.from === entry.from)
+        : snap.chat.some((e) => e.seq == null && e.ts === entry.ts && e.from === entry.from && e.text === entry.text);
+      if (!dup) {
+        snap.chat.push(entry);
+        snap.chat.sort((a, b) => (a.seq ?? a.ts) - (b.seq ?? b.ts));
       }
       break;
     case "player_upserted":
@@ -106,6 +111,26 @@ export function createSendIntent(transport: { send: (intent: unknown) => Promise
     sessionState.error = null;
     await transport.send(intent);
   };
+}
+
+/** Set the transport for reconnection handling. */
+export function setTransport(transport: { retryConnection: () => Promise<void>; close: () => Promise<void> } | null) {
+  sessionState.transport = transport;
+}
+
+/** Update connection state from transport. */
+export function setConnectionState(state: "offline" | "connecting" | "connected" | "reconnecting" | "failed", attempt = 0) {
+  sessionState.connectionState = state;
+  sessionState.reconnectAttempt = attempt;
+  sessionState.connected = state === "connected";
+}
+
+/** Retry connection after failure. */
+export async function retryConnection(): Promise<void> {
+  sessionState.error = null;
+  if (sessionState.transport) {
+    await sessionState.transport.retryConnection();
+  }
 }
 
 /** Derived: my peer_id from info. */
@@ -168,6 +193,9 @@ export function resetSession(): void {
   sessionState.presence = [];
   sessionState.connected = false;
   sessionState.error = null;
+  sessionState.connectionState = "offline";
+  sessionState.reconnectAttempt = 0;
+  sessionState.transport = null;
 }
 
 /** Clear the current error (for dismissible banner). */

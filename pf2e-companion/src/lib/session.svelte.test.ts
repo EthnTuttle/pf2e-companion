@@ -130,7 +130,7 @@ describe("applyPatch reducer", () => {
   test("session_ended resets state", () => {
     const snap = makeSnapshot();
     applyPatch({ session_id: "s1", kind: "snapshot", snapshot: snap });
-    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice" };
+    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice", pin: null };
     sessionState.connected = true;
 
     applyPatch({ session_id: "s1", kind: "session_ended" });
@@ -161,7 +161,7 @@ describe("applyPatch reducer", () => {
   test("stale-session patch (different session_id) is dropped", () => {
     const snap = makeSnapshot();
     applyPatch({ session_id: "s1", kind: "snapshot", snapshot: snap });
-    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice" };
+    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice", pin: null };
 
     // Patch with different session_id should be ignored
     applyPatch({ session_id: "s2", kind: "chat_appended", entry: { ts: 2000, from: "Eve", kind: "chat", text: "injected", roll: null } });
@@ -171,7 +171,7 @@ describe("applyPatch reducer", () => {
   });
 
   test("stale-session presence (different session_id) is dropped", () => {
-    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice" };
+    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice", pin: null };
     sessionState.presence = ["p1"];
 
     // Presence with different session_id should be ignored
@@ -203,6 +203,79 @@ describe("applyPatch reducer", () => {
 
     expect(sessionState.snapshot?.chat).toHaveLength(3);
   });
+
+  test("chat_appended dedupes by seq when present", () => {
+    const snap = makeSnapshot({ chat: [] });
+    applyPatch({ session_id: "s1", kind: "snapshot", snapshot: snap });
+
+    const entry = { ts: 2000, from: "Alice", kind: "chat" as const, text: "hello", roll: null, seq: 42 };
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry });
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry }); // Duplicate seq
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry }); // Duplicate again
+
+    expect(sessionState.snapshot?.chat).toHaveLength(1);
+    expect(sessionState.snapshot?.chat[0].seq).toBe(42);
+  });
+
+  test("chat_appended seq dedupe does not affect legacy entries without seq", () => {
+    const snap = makeSnapshot({ chat: [] });
+    applyPatch({ session_id: "s1", kind: "snapshot", snapshot: snap });
+
+    // Legacy entry without seq
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 2000, from: "Alice", kind: "chat", text: "hello", roll: null } });
+    // New entry with seq
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 2000, from: "Alice", kind: "chat", text: "hello", roll: null, seq: 42 } });
+    // Another legacy entry same (ts,from,text) should be deduped
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 2000, from: "Alice", kind: "chat", text: "hello", roll: null } });
+
+    expect(sessionState.snapshot?.chat).toHaveLength(2); // One legacy, one with seq
+  });
+
+  test("chat_appended mixed seq/legacy coexistence sorts by seq then ts", () => {
+    const snap = makeSnapshot({ chat: [] });
+    applyPatch({ session_id: "s1", kind: "snapshot", snapshot: snap });
+
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 2000, from: "Alice", kind: "chat", text: "first", roll: null, seq: 10 } });
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 1500, from: "Bob", kind: "chat", text: "second (legacy)", roll: null } }); // Legacy, earlier ts
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 2500, from: "Alice", kind: "chat", text: "third", roll: null, seq: 5 } }); // Lower seq
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 1800, from: "Charlie", kind: "chat", text: "fourth (legacy)", roll: null } }); // Legacy, between
+
+    const chat = sessionState.snapshot?.chat ?? [];
+    expect(chat).toHaveLength(4);
+    // Sorted by (seq ?? ts): 5 (third), 10 (first), 1500 (second legacy), 1800 (fourth legacy)
+    expect(chat[0].text).toBe("third");
+    expect(chat[1].text).toBe("first");
+    expect(chat[2].text).toBe("second (legacy)");
+    expect(chat[3].text).toBe("fourth (legacy)");
+  });
+
+  test("chat_appended same seq different from both survive (composite key)", () => {
+    const snap = makeSnapshot({ chat: [] });
+    applyPatch({ session_id: "s1", kind: "snapshot", snapshot: snap });
+
+    // Same seq, different authors — both should survive
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 2000, from: "Alice", kind: "chat", text: "hello from Alice", roll: null, seq: 42 } });
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 2001, from: "Bob", kind: "chat", text: "hello from Bob", roll: null, seq: 42 } });
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry: { ts: 2002, from: "Charlie", kind: "chat", text: "hello from Charlie", roll: null, seq: 42 } });
+
+    expect(sessionState.snapshot?.chat).toHaveLength(3);
+    const froms = sessionState.snapshot?.chat.map(e => e.from).sort();
+    expect(froms).toEqual(["Alice", "Bob", "Charlie"]);
+  });
+
+  test("chat_appended identical seq and from still dedupes", () => {
+    const snap = makeSnapshot({ chat: [] });
+    applyPatch({ session_id: "s1", kind: "snapshot", snapshot: snap });
+
+    const entry = { ts: 2000, from: "Alice", kind: "chat" as const, text: "hello", roll: null, seq: 42 };
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry });
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry }); // Duplicate (seq, from)
+    applyPatch({ session_id: "s1", kind: "chat_appended", entry }); // Duplicate again
+
+    expect(sessionState.snapshot?.chat).toHaveLength(1);
+    expect(sessionState.snapshot?.chat[0].seq).toBe(42);
+    expect(sessionState.snapshot?.chat[0].from).toBe("Alice");
+  });
 });
 
 describe("applyPresence", () => {
@@ -226,20 +299,20 @@ describe("applyPresence", () => {
 
 describe("derived state", () => {
   test("myPeerId derives from info", () => {
-    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice" };
+    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice", pin: null };
     // Derived values need $derived context - tested via component integration
     expect(sessionState.info.peer_id).toBe("p1");
   });
 
   test("myRole derives from info", () => {
-    sessionState.info = { session_id: "s1", peer_id: "p1", role: "gm", lan_url: null, p2p_ticket: null, name: "GM" };
+    sessionState.info = { session_id: "s1", peer_id: "p1", role: "gm", lan_url: null, p2p_ticket: null, name: "GM", pin: null };
     expect(sessionState.info.role).toBe("gm");
   });
 });
 
 describe("resetSession", () => {
   test("clears all state", () => {
-    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice" };
+    sessionState.info = { session_id: "s1", peer_id: "p1", role: "player", lan_url: null, p2p_ticket: null, name: "Alice", pin: null };
     sessionState.snapshot = makeSnapshot();
     sessionState.presence = ["p1", "p2"];
     sessionState.connected = true;

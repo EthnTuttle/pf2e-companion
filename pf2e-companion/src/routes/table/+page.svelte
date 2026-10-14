@@ -15,10 +15,13 @@
   let joinTicket = $state("");
   let joinMode = $state<"ticket" | "lan">("ticket");
   let lanHost = $state("");
+  let lanPin = $state("");
   let loading = $state(false);
   let error = $state<string | null>(null);
   let myTicket = $state<string | null>(null);
   let myLanUrl = $state<string | null>(null);
+
+  const sessionPin = $derived(sessionState.info?.pin ?? null);
 
   const colors = [
     "#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#a855f7",
@@ -82,7 +85,7 @@
         const url = new URL(lanHost);
         const sessionId = url.pathname.replace("/ws/", "").replace("/", "");
         const { invoke } = await import("@tauri-apps/api/core");
-        info = await invoke("session_join_lan", { hostUrl: lanHost, name: playerName, sessionId });
+        info = await invoke("session_join_lan", { hostUrl: lanHost, name: playerName, sessionId, pin: lanPin.trim().toUpperCase() || null });
       }
       sessionState.info = info;
       sessionState.connected = true;
@@ -158,7 +161,7 @@
         <input type="color" bind:value={playerColor} />
         <div class="swatches">
           {#each colors as c}
-            <button type="button" class="swatch" style="background:{c}" class:active={playerColor === c} onclick={() => (playerColor = c)}></button>
+            <button type="button" class="swatch" style="background:{c}" class:active={playerColor === c} onclick={() => (playerColor = c)} aria-label="Color {c}"></button>
           {/each}
         </div>
       </div>
@@ -213,6 +216,17 @@
         </div>
       </label>
     </div>
+    {#if sessionPin}
+    <div class="invite-row">
+      <label>
+        <span>Table PIN (required for LAN join)</span>
+        <div class="copy-row">
+          <code>{sessionPin}</code>
+          <button type="button" onclick={() => copyToClipboard(sessionPin, "Table PIN")}>Copy</button>
+        </div>
+      </label>
+    </div>
+    {/if}
     <a class="btn" href="/table/play">Enter Table →</a>
   </section>
 {/if}
@@ -234,6 +248,10 @@
         <label>
           <span>Host LAN URL</span>
           <input type="url" bind:value={lanHost} placeholder="ws://192.168.1.42:4780/abc123" />
+        </label>
+        <label>
+          <span>Table PIN (6 chars)</span>
+          <input type="text" bind:value={lanPin} placeholder="e.g. A7K9M2" maxlength="6" style="text-transform: uppercase;" />
         </label>
       {/if}
     </div>

@@ -21,7 +21,8 @@ use super::{
 };
 use crate::adventure::AdventureDef;
 
-/// TS `SessionInfo`.
+/// TS `SessionInfo`. `pin` (CONTRACT-10_5 § 1) is the table PIN —
+/// host: minted; load: re-minted; joiner: `None`.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct SessionInfo {
     pub session_id: String,
@@ -30,6 +31,22 @@ pub struct SessionInfo {
     pub lan_url: Option<String>,
     pub p2p_ticket: Option<String>,
     pub name: String,
+    pub pin: Option<String>,
+}
+
+/// Crockford-ish PIN alphabet (no 0/O/1/I/L — unambiguous readback).
+pub const PIN_ALPHABET: &[u8; 30] = b"23456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/// Mint a 6-char table PIN from `Uuid::new_v4()` bytes (`u16 % 30`,
+/// same entropy style as dice.rs — no `rand`).
+pub fn gen_pin() -> String {
+    let uuid = Uuid::new_v4();
+    let mut out = String::with_capacity(6);
+    for chunk in uuid.as_bytes().chunks_exact(2).take(6) {
+        let r = u16::from_le_bytes([chunk[0], chunk[1]]);
+        out.push(PIN_ALPHABET[(r % PIN_ALPHABET.len() as u16) as usize] as char);
+    }
+    out
 }
 
 /// Resolves an adventure slug to its parsed def. The IPC layer installs
@@ -53,6 +70,10 @@ pub struct SessionService {
     save_notify: Arc<Notify>,
     sync_notify: Arc<Notify>,
     adventures: AdventureResolver,
+    /// Table PIN (CONTRACT-10_5 § 1) — in-memory only, NEVER in the doc
+    /// or snapshot. Host sessions mint one; sessions without a pin
+    /// accept any hello (back-compat).
+    pin: Option<String>,
     /// Shutdown signal (LAN bridge, iroh accept loop, forwarder, saver).
     shutdown: watch::Sender<bool>,
     /// Tasks spawned for this session — aborted by [`SessionService::shutdown`].
@@ -64,6 +85,7 @@ impl SessionService {
         doc: SharedDoc,
         save_path: Option<PathBuf>,
         adventures: AdventureResolver,
+        pin: Option<String>,
     ) -> Arc<Self> {
         let (events, _) = broadcast::channel(512);
         let (shutdown, _) = watch::channel(false);
@@ -74,9 +96,15 @@ impl SessionService {
             save_notify: Arc::new(Notify::new()),
             sync_notify: Arc::new(Notify::new()),
             adventures,
+            pin,
             shutdown,
             tasks: Mutex::new(Vec::new()),
         })
+    }
+
+    /// The table PIN, if this session gates LAN joins (CONTRACT-10_5 § 1).
+    pub fn pin(&self) -> Option<&str> {
+        self.pin.as_deref()
     }
 
     /// A receiver that resolves once the session is retired.
@@ -98,6 +126,20 @@ impl SessionService {
         let tasks = std::mem::take(&mut *self.tasks.lock().expect("task registry"));
         for task in tasks {
             task.abort();
+        }
+    }
+
+    /// Signal + abort + AWAIT all registered tasks (frees ports before
+    /// returning — CONTRACT-10_5 § 2). Use from async contexts that are
+    /// about to re-bind the canonical LAN port.
+    pub async fn shutdown_and_wait(&self) {
+        let _ = self.shutdown.send(true);
+        let tasks = std::mem::take(&mut *self.tasks.lock().expect("task registry"));
+        for t in &tasks {
+            t.abort();
+        }
+        for t in tasks {
+            let _ = t.await; // JoinHandle resolves after abort
         }
     }
 
@@ -366,6 +408,8 @@ pub struct ActiveSession {
     pub service: Arc<SessionService>,
     pub handle: Arc<SessionHandle>,
     pub info: SessionInfo,
+    /// Table PIN (CONTRACT-10_5 § 1) — in-memory only, never in the doc.
+    pub pin: Option<String>,
 }
 
 pub struct SessionRegistry(pub Mutex<Option<ActiveSession>>);
@@ -378,6 +422,8 @@ impl SessionRegistry {
     /// Install a session, gracefully retiring any previous one (its
     /// spawned tasks are shut down so stale LAN/p2p clients can no
     /// longer mutate the old doc or forward patches into the new UI).
+    /// No-op safety net: the session commands drain the registry via
+    /// [`SessionRegistry::take_and_shutdown`] first (CONTRACT-10_5 § 2).
     pub fn install(&self, session: ActiveSession) {
         let old = self.0.lock().expect("registry lock").replace(session);
         if let Some(old) = old {
@@ -391,6 +437,20 @@ impl SessionRegistry {
         let old = self.0.lock().expect("registry lock").take();
         if let Some(old) = &old {
             old.service.shutdown();
+        }
+        old
+    }
+
+    /// Take + persist + shut down the old session IN FULL before
+    /// returning — the LAN listener (and its port) is released by the
+    /// time this resolves, so an immediate re-host re-binds 4780
+    /// (CONTRACT-10_5 § 2).
+    pub async fn take_and_shutdown(&self) -> Option<ActiveSession> {
+        let old = self.0.lock().expect("registry lock").take();
+        if let Some(old) = &old {
+            let _ = old.service.save_now();
+            let _ = old.service.peer_left(&old.handle.peer_id);
+            old.service.shutdown_and_wait().await;
         }
         old
     }
@@ -452,7 +512,7 @@ pub async fn host(
         .with_context(|| format!("create {}", dir.display()))?;
     let save_path = dir.join(format!("{session_id}.automerge"));
 
-    let svc = SessionService::new(doc, Some(save_path), adventures);
+    let svc = SessionService::new(doc, Some(save_path), adventures, Some(gen_pin()));
     svc.save_now().context("initial session save")?;
     svc.spawn_saver();
 
@@ -486,7 +546,7 @@ pub async fn join_peer(
 ) -> Result<SessionHandle> {
     let peer_id = Uuid::new_v4().to_string();
     let doc = SharedDoc::new(super::SessionDoc::blank());
-    let svc = SessionService::new(doc, None, adventures);
+    let svc = SessionService::new(doc, None, adventures, None);
 
     let pump_task = crate::net::connect_and_sync(
         ticket,
@@ -550,7 +610,7 @@ pub async fn load(
     let doc = super::SessionDoc::load(&bytes)?;
     let real_session_id = doc.session_id().to_string();
     let peer_id = Uuid::new_v4().to_string();
-    let svc = SessionService::new(SharedDoc::new(doc), Some(path), adventures);
+    let svc = SessionService::new(SharedDoc::new(doc), Some(path), adventures, Some(gen_pin()));
     svc.spawn_saver();
 
     let lan_url = start_lan(&svc).await;

@@ -396,6 +396,7 @@ export interface ChatEntry {
   kind: "chat" | "roll" | "system";
   text: string;
   roll: RollRecord | null;
+  seq?: number;
 }
 
 export interface SessionInfo {
@@ -405,6 +406,7 @@ export interface SessionInfo {
   lan_url: string | null;
   p2p_ticket: string | null;
   name: string;
+  pin: string | null;
 }
 
 export interface SessionSnapshot {

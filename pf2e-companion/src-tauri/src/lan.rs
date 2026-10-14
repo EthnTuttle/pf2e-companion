@@ -24,11 +24,17 @@ use crate::session::{Intent, Role, SessionPatchEvent, SessionPresenceEvent};
 /// Canonical LAN port (CONTRACT § 2).
 pub const LAN_PORT: u16 = 4780;
 
-/// Client → host frames.
+/// Client → host frames. `Hello.pin` is additive (CONTRACT-10_5 § 1):
+/// required when the session holds a table PIN, ignored otherwise.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ClientFrame {
-    Hello { session_id: String, name: String },
+    Hello {
+        session_id: String,
+        name: String,
+        #[serde(default)]
+        pin: Option<String>,
+    },
     Intent { intent: Intent },
 }
 
@@ -144,7 +150,7 @@ async fn handle_socket(
             return Ok(());
         }
     };
-    let ClientFrame::Hello { session_id, name } = hello else {
+    let ClientFrame::Hello { session_id, name, pin } = hello else {
         let _ = send_frame(
             &mut sink,
             &HostFrame::Error { message: "expected hello first".into(), rejected_intent: None },
@@ -165,6 +171,23 @@ async fn handle_socket(
         .await;
         let _ = sink.close().await;
         return Ok(());
+    }
+    // Table PIN (CONTRACT-10_5 § 1): gates first joins AND same-name
+    // reattach equally (pin + name required to reattach). Sessions
+    // without a pin accept any hello (back-compat).
+    if let Some(expected_pin) = svc.pin() {
+        if pin.as_deref() != Some(expected_pin) {
+            let _ = send_frame(
+                &mut sink,
+                &HostFrame::Error {
+                    message: "bad or missing table PIN".to_string(),
+                    rejected_intent: None,
+                },
+            )
+            .await;
+            let _ = sink.close().await;
+            return Ok(());
+        }
     }
 
     let minted = Uuid::new_v4().to_string();
@@ -206,8 +229,18 @@ async fn handle_socket(
     .await?;
 
     // --- main loop: forward broadcasts, apply intents ---
+    // Server-initiated keepalive: browsers auto-pong, so dead thin
+    // clients surface as closed sockets instead of silent staleness
+    // (CONTRACT-10_5 § 4).
+    let mut ping_tick = tokio::time::interval(std::time::Duration::from_secs(15));
+    ping_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
+            _ = ping_tick.tick() => {
+                sink.send(Message::Ping(Vec::new().into()))
+                    .await
+                    .map_err(|e| anyhow!("ws ping: {e}"))?;
+            }
             event = rx.recv() => {
                 match event {
                     Ok(SessionEvent::Patch(event)) => {

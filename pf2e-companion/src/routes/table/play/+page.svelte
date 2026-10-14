@@ -3,7 +3,7 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { sessionIntent, type Intent, type Token, type Grid, type CharacterSheet, type RollRecord } from "$lib/ipc";
-  import { sessionState, applyPatch, applyPresence, resetSession, clearError, getMyPeerId, getMyRole, getIsGm, getMyPlayer, getActiveInitiativePeer, getChatEntries, getTokens, getVisibleHandouts, getGrid } from "$lib/session.svelte";
+  import { sessionState, applyPatch, applyPresence, resetSession, clearError, setTransport, setConnectionState, retryConnection, getMyPeerId, getMyRole, getIsGm, getMyPlayer, getActiveInitiativePeer, getChatEntries, getTokens, getVisibleHandouts, getGrid } from "$lib/session.svelte";
   import { createTransport } from "$lib/transport";
   import { lensState } from "$lib/lens.svelte";
 
@@ -253,6 +253,9 @@
 
     try {
       transport = createTransport(name);
+      transport.onStateChange((state, attempt) => {
+        setConnectionState(state, attempt);
+      });
       await transport.connect();
       transport.onPatch(applyPatch);
       transport.onPresence(applyPresence);
@@ -260,6 +263,7 @@
         sessionState.error = msg;
       });
       sessionState.connected = true;
+      setTransport(transport);
     } catch (e) {
       error = String(e);
       setTimeout(() => goto("/table"), 2000);
@@ -288,7 +292,7 @@
 </script>
 
 {#if error && !sessionState.connected}
-  <div class="error-banner">
+  <div class="error-banner" role="alert">
     <p>{error}</p>
     <p class="muted">Redirecting to lobby…</p>
   </div>
@@ -305,7 +309,7 @@
       </div>
     </header>
 
-    <nav class="play-tabs" role="tablist">
+    <div class="play-tabs" role="tablist" aria-label="Table tabs">
       {#each tabs as t}
         {#if !t.gmOnly || isGm}
           <button
@@ -314,21 +318,30 @@
             class:active={activeTab === t.id}
             onclick={() => (activeTab = t.id)}
           >
-            <span class="ico">{t.icon}</span>
+            <span class="ico" aria-hidden="true">{t.icon}</span>
             <span class="lbl">{t.label}</span>
           </button>
         {/if}
       {/each}
-    </nav>
-
-    {#if sessionState.error}
-    <div class="session-error-banner">
-      <span>{sessionState.error}</span>
-      <button onclick={clearError} aria-label="Dismiss">✕</button>
     </div>
-  {/if}
 
-  <main class="play-panel" role="tabpanel">
+    {#if sessionState.connectionState === "reconnecting"}
+      <div class="connection-banner reconnecting" role="status" aria-live="polite">
+        <span>Reconnecting… (attempt {sessionState.reconnectAttempt}/3)</span>
+      </div>
+    {:else if sessionState.connectionState === "failed"}
+      <div class="connection-banner failed" role="alert">
+        <span>Connection lost</span>
+        <button onclick={retryConnection} class="rejoin-btn">Rejoin</button>
+      </div>
+    {:else if sessionState.error}
+      <div class="session-error-banner" role="alert">
+        <span>{sessionState.error}</span>
+        <button onclick={clearError} aria-label="Dismiss">✕</button>
+      </div>
+    {/if}
+
+    <main class="play-panel" aria-label={activeTab}>
       {#if activeTab === "chat"}
         <div class="chat-panel">
           <div class="chat-log">
@@ -359,6 +372,7 @@
                 bind:value={chatDraft}
                 placeholder="Type a message or /roll 1d20+7"
                 autocomplete="off"
+                onkeydown={handleChatKeydown}
               />
             </form>
             <div class="dice-quick">
@@ -394,9 +408,9 @@
                 <span class="num">{i + 1}.</span>
                 <span class="name">{sessionState.snapshot?.players[peerId]?.name ?? peerId.slice(0, 8)}</span>
                 {#if isGm}
-                  <button class="move-btn" onclick={() => moveInitiative(peerId, -1)} disabled={i === 0}>↑</button>
-                  <button class="move-btn" onclick={() => moveInitiative(peerId, 1)} disabled={i === (sessionState.snapshot?.init.order.length ?? 1) - 1}>↓</button>
-                  <button class="move-btn" onclick={() => removeFromInitiative(peerId)}>✕</button>
+                  <button class="move-btn" onclick={() => moveInitiative(peerId, -1)} disabled={i === 0} aria-label="Move up">↑</button>
+                  <button class="move-btn" onclick={() => moveInitiative(peerId, 1)} disabled={i === (sessionState.snapshot?.init.order.length ?? 1) - 1} aria-label="Move down">↓</button>
+                  <button class="move-btn" onclick={() => removeFromInitiative(peerId)} aria-label="Remove from initiative">✕</button>
                 {/if}
               </li>
             {:else}
@@ -420,7 +434,7 @@
       {:else if activeTab === "party"}
         <div class="party-panel">
           {#each Object.entries(sessionState.snapshot?.players ?? {}) as [peerId, player] (peerId)}
-            <div class="party-card" style="--player-color: {player.color};">
+            <div class="party-card" style="--player-color: {player.color};" class:dimmed={player.connected === false}>
               <div class="card-header">
                 <span class="name">{player.name}</span>
                 <span class="peer">{peerId.slice(0, 8)}</span>
@@ -479,10 +493,14 @@
               {#each tokens as token}
                 <div
                   class="token"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Token {token.label} at {token.x},{token.y}"
                   style="left: {token.x * 32}px; top: {token.y * 32}px; border-color: {token.owner === myPeerId ? '#22c55e' : (isGm ? '#f59e0b' : '#6b7280')};"
                   class:owned={token.owner === myPeerId}
                   class:gm-token={isGm && token.owner !== myPeerId}
                   onmousedown={(e) => handleTokenMouseDown(token, e)}
+                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTokenMouseDown(token, e as unknown as MouseEvent); } }}
                 >
                   <span class="label">{token.label}</span>
                   {#if (isGm || token.owner === myPeerId) && token.pc}
@@ -526,18 +544,18 @@
             <h3>GM Drawer</h3>
             <div class="gm-actions">
               <button onclick={handleLoadAdventureClick} class="primary">Load Widow's Lamp</button>
-              <button onclick={endSession}>End Session</button>
+              <button onclick={endSession} class="danger">End Session</button>
             </div>
           </header>
           {#if sessionState.error}
             <div class="gm-hint">Authority rejections appear in the red error banner above.</div>
           {/if}
-          <div class="drawer-tabs">
-            <button class:active={gmDrawerTab === "chat"} onclick={() => (gmDrawerTab = "chat")}>Chat Log</button>
-            <button class:active={gmDrawerTab === "dice"} onclick={() => (gmDrawerTab = "dice")}>Dice</button>
-            <button class:active={gmDrawerTab === "tools"} onclick={() => (gmDrawerTab = "tools")}>Tools</button>
+          <div class="drawer-tabs" role="tablist" aria-label="GM drawer tabs">
+            <button role="tab" aria-selected={gmDrawerTab === "chat"} class:active={gmDrawerTab === "chat"} onclick={() => (gmDrawerTab = "chat")}>Chat Log</button>
+            <button role="tab" aria-selected={gmDrawerTab === "dice"} class:active={gmDrawerTab === "dice"} onclick={() => (gmDrawerTab = "dice")}>Dice</button>
+            <button role="tab" aria-selected={gmDrawerTab === "tools"} class:active={gmDrawerTab === "tools"} onclick={() => (gmDrawerTab = "tools")}>Tools</button>
           </div>
-          <div class="drawer-content">
+          <div class="drawer-content" role="tabpanel">
             {#if gmDrawerTab === "chat"}
               <div class="drawer-chat">
                 {#each chatEntries as entry (entry.ts)}
@@ -574,18 +592,18 @@
             {/if}
           </div>
           <form class="drawer-input" onsubmit={handleGmDrawerSubmit}>
-            <input type="text" bind:value={gmDrawerInput} placeholder="/roll 2d6+3 --secret or chat message" />
+            <input type="text" bind:value={gmDrawerInput} placeholder="/roll 2d6+3 --secret or chat message" onkeydown={handleGmDrawerKeydown} />
           </form>
         </div>
       {/if}
     </main>
 
     {#if showGmDrawer && isGm}
-      <aside class="gm-drawer-overlay" onclick={() => (showGmDrawer = false)}>
-        <div class="gm-drawer" onclick={(e) => e.stopPropagation()}>
+      <div class="gm-drawer-overlay" role="dialog" aria-modal="true" aria-label="GM Drawer" tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') showGmDrawer = false; }}>
+        <div class="gm-drawer">
           <header>
             <h3>GM Drawer</h3>
-            <button onclick={() => (showGmDrawer = false)}>✕</button>
+            <button onclick={() => (showGmDrawer = false)} aria-label="Close">✕</button>
           </header>
           {#if sessionState.error}
             <div class="gm-hint">Authority rejections appear in the red error banner above.</div>
@@ -607,11 +625,12 @@
                 type="text"
                 bind:value={gmDrawerInput}
                 placeholder="/roll 2d6+3 --secret  or  chat message"
+                onkeydown={handleGmDrawerKeydown}
               />
             </form>
           </div>
         </div>
-      </aside>
+      </div>
     {/if}
   </div>
 {/if}
@@ -655,6 +674,37 @@
     background: rgba(204, 51, 51, 0.1);
   }
 
+  .connection-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  .connection-banner.reconnecting {
+    background: rgba(245, 158, 11, 0.15);
+    border-bottom: 1px solid #f59e0b;
+    color: #f59e0b;
+  }
+  .connection-banner.failed {
+    background: rgba(204, 51, 51, 0.15);
+    border-bottom: 1px solid #c33;
+    color: #c33;
+  }
+  .rejoin-btn {
+    background: none;
+    border: 1px solid currentColor;
+    color: inherit;
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+  }
+  .rejoin-btn:hover {
+    background: color-mix(in srgb, currentColor 15%, transparent);
+  }
+
   .gm-hint {
     padding: 0.5rem 1rem;
     background: rgba(255, 165, 0, 0.1);
@@ -662,6 +712,10 @@
     color: #c80;
     font-size: 0.8rem;
     font-style: italic;
+  }
+
+  .party-card.dimmed {
+    opacity: 0.6;
   }
 
   .play-surface {

@@ -733,6 +733,7 @@ fn install_session(
     registry: &Arc<SessionRegistry>,
     handle: Arc<SessionHandle>,
 ) -> Result<SessionInfo, String> {
+    let pin = handle.service().pin().map(str::to_string);
     let info = SessionInfo {
         session_id: handle.session_id.clone(),
         peer_id: handle.peer_id.clone(),
@@ -740,12 +741,14 @@ fn install_session(
         lan_url: handle.lan_url.clone(),
         p2p_ticket: handle.p2p_ticket.clone(),
         name: handle.name.clone(),
+        pin: pin.clone(),
     };
     spawn_session_forwarder(app, &handle);
     registry.install(session::ActiveSession {
         service: handle.service(),
         handle,
         info: info.clone(),
+        pin,
     });
     Ok(info)
 }
@@ -763,6 +766,9 @@ pub async fn session_host(
     db: State<'_, Arc<Db>>,
     registry: State<'_, Arc<SessionRegistry>>,
 ) -> Result<SessionInfo, String> {
+    // Release the old session IN FULL (port 4780 included) before
+    // bringing up the new one (CONTRACT-10_5 § 2).
+    registry.take_and_shutdown().await;
     let adventures = session::service::db_adventures((*db).clone());
     let handle = session::service::host(
         &vault.0,
@@ -786,6 +792,9 @@ pub async fn session_join_peer(
 ) -> Result<SessionInfo, String> {
     #[cfg(feature = "p2p")]
     {
+        // IPC paths are local-trusted; the joiner carries no PIN
+        // (CONTRACT-10_5 § 1). Old session is released in full first.
+        registry.take_and_shutdown().await;
         let handle = session::service::join_peer(&ticket, &name, session::service::no_adventures())
             .await
             .map_err(|e| e.to_string())?;
@@ -809,6 +818,8 @@ pub async fn session_load(
     db: State<'_, Arc<Db>>,
     registry: State<'_, Arc<SessionRegistry>>,
 ) -> Result<SessionInfo, String> {
+    // Release the old session IN FULL before resuming (CONTRACT-10_5 § 2).
+    registry.take_and_shutdown().await;
     let adventures = session::service::db_adventures((*db).clone());
     let gm_name = name.unwrap_or_else(|| "GM".to_string());
     let handle =
@@ -847,10 +858,8 @@ pub fn session_snapshot(
 /// Leave / tear down the active session (persists first).
 #[tauri::command]
 pub async fn session_leave(registry: State<'_, Arc<SessionRegistry>>) -> Result<(), String> {
-    if let Some(active) = registry.take() {
-        let _ = active.service.save_now();
-        let _ = active.service.peer_left(&active.handle.peer_id);
-    }
+    // Persist + full shutdown (ports released before returning).
+    registry.take_and_shutdown().await;
     Ok(())
 }
 

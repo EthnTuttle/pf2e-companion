@@ -65,6 +65,7 @@ impl SessionDoc {
         doc.put(&meta_obj, "created_at", meta.created_at).expect("created_at");
         doc.put(&meta_obj, "adventure_slug", "").expect("adventure_slug");
         doc.put(&meta_obj, "ended", false).expect("ended");
+        doc.put(&meta_obj, "next_chat_seq", 1i64).expect("next_chat_seq");
 
         doc.put_object(ROOT, "players", ObjType::Map).expect("players");
         doc.put_object(ROOT, "chat", ObjType::List).expect("chat");
@@ -203,18 +204,19 @@ impl SessionDoc {
             }
 
             // System chat entry with the first scene's read-aloud.
-            let chat = ensure_list(doc, &ROOT, "chat");
             let text = def
                 .scenes
                 .first()
                 .and_then(|s| s.read_aloud.clone())
                 .unwrap_or_else(|| format!("{} begins.", def.title));
-            let entry = doc.insert_object(&chat, doc.length(&chat), ObjType::Map)?;
-            doc.put(&entry, "ts", now_ms())?;
-            doc.put(&entry, "from", "system")?;
-            doc.put(&entry, "kind", "system")?;
-            doc.put(&entry, "text", text.as_str())?;
-            doc.put(&entry, "has_roll", false)?;
+            append_chat(doc, &mut ChatEntry {
+                ts: now_ms(),
+                from: "system".to_string(),
+                kind: ChatKind::System,
+                text,
+                roll: None,
+                seq: None,
+            })?;
         }
         let post = self.snapshot()?;
         Ok(diff_snapshots(&self.session_id, &pre, &post))
@@ -285,22 +287,24 @@ impl SessionDoc {
                 } else {
                     format!("{} = {}", outcome.expr, outcome.total)
                 };
-                append_chat(doc, ChatEntry {
+                append_chat(doc, &mut ChatEntry {
                     ts: now_ms(),
                     from: actor.to_string(),
                     kind: ChatKind::Roll,
                     text,
                     roll: if secret { None } else { Some(record.clone()) },
+                    seq: None,
                 })?;
                 rolled = Some(record);
             }
             Intent::Chat { text } => {
-                append_chat(doc, ChatEntry {
+                append_chat(doc, &mut ChatEntry {
                     ts: now_ms(),
                     from: actor.to_string(),
                     kind: ChatKind::Chat,
                     text: text.clone(),
                     roll: None,
+                    seq: None,
                 })?;
             }
             Intent::RevealHandout { handout_id } => {
@@ -507,6 +511,7 @@ impl SessionDoc {
                     kind,
                     text: get_str(doc, &entry, "text").unwrap_or_default(),
                     roll,
+                    seq: get_i64(doc, &entry, "seq").map(|v| v as u64),
                 });
             }
         }
@@ -802,7 +807,15 @@ fn read_token(doc: &AutoCommit, obj: &ObjId) -> Token {
     }
 }
 
-fn append_chat(doc: &mut AutoCommit, entry: ChatEntry) -> Result<()> {
+fn append_chat(doc: &mut AutoCommit, entry: &mut ChatEntry) -> Result<()> {
+    // Stamp a monotonic seq from meta.next_chat_seq (CONTRACT-10_5 § 3);
+    // legacy docs without the counter start at 1.
+    let meta = ensure_map(doc, &ROOT, "meta");
+    let next = get_i64(doc, &meta, "next_chat_seq").unwrap_or(1).max(1);
+    doc.put(&meta, "next_chat_seq", next + 1)?;
+    let seq = next as u64;
+    entry.seq = Some(seq);
+
     let chat = ensure_list(doc, &ROOT, "chat");
     let e = doc.insert_object(&chat, doc.length(&chat), ObjType::Map)?;
     doc.put(&e, "ts", entry.ts)?;
@@ -817,6 +830,7 @@ fn append_chat(doc: &mut AutoCommit, entry: ChatEntry) -> Result<()> {
         },
     )?;
     doc.put(&e, "text", entry.text.as_str())?;
+    doc.put(&e, "seq", seq as i64)?;
     if let Some(roll) = &entry.roll {
         doc.delete(&e, "roll").ok();
         let r = doc.put_object(&e, "roll", ObjType::Map)?;

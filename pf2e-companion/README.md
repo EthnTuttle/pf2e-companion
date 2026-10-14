@@ -220,7 +220,7 @@ Real-time shared tabletop for PF2e. Desktop hosts via Tauri IPC; mobile clients 
 
 ### Join (Mobile / Second Desktop)
 - **P2P (desktop)**: Paste the ticket into the "P2P Ticket" field on `/table`, enter your name, click **Join Session**.
-- **LAN (mobile)**: Open the LAN URL (e.g., `ws://192.168.1.42:4780/abc123`) in the mobile browser or Tauri Android/iOS app. The `?host=` query param is auto-handled.
+- **LAN (mobile)**: Open the LAN URL (e.g., `ws://192.168.1.42:4780/abc123`) in the mobile browser or Tauri Android/iOS app. The `?host=` query param is auto-handled. **LAN sessions are PIN-protected** — the host lobby displays a 6-character Table PIN next to the LAN URL; joiners must enter it.
 
 ### Feature flags (Rust, `src-tauri/Cargo.toml`)
 - `lan` (default ON) — WebSocket bridge on port 4780 (`tokio-tungstenite`).

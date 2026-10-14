@@ -61,12 +61,17 @@ async fn await_frame(ws: &mut ClientWs, want_type: &str, pred: impl Fn(&Value) -
 }
 
 /// Join a hosted table over its advertised LAN URL; returns the socket
-/// post-handshake plus the assigned peer id.
-async fn join(url: &str, session_id: &str, name: &str) -> (ClientWs, String) {
+/// post-handshake plus the assigned peer id. Sends the table PIN
+/// (CONTRACT-10_5 § 1) when the host holds one.
+async fn join(url: &str, session_id: &str, name: &str, pin: Option<&str>) -> (ClientWs, String) {
     let (mut ws, _) = tokio_tungstenite::connect_async(url.to_string())
         .await
         .expect("connect to advertised lan url");
-    send_json(&mut ws, json!({ "type": "hello", "session_id": session_id, "name": name })).await;
+    send_json(
+        &mut ws,
+        json!({ "type": "hello", "session_id": session_id, "name": name, "pin": pin }),
+    )
+    .await;
     let welcome = await_frame(&mut ws, "welcome", |_| true).await;
     assert_eq!(welcome["session_id"], session_id);
     assert_eq!(welcome["role"], "player");
@@ -91,7 +96,7 @@ async fn roll_dice_reaches_host_bus_and_ws_client() {
 
     // A thin client joins via the advertised URL.
     let url = handle.lan_url.clone().expect("host advertises a lan url");
-    let (mut ws, _peer_id) = join(&url, &handle.session_id, "Player One").await;
+    let (mut ws, _peer_id) = join(&url, &handle.session_id, "Player One", handle.service().pin()).await;
 
     // The GM rolls through the session-scoped LLM tool path.
     let call = ToolCall {
@@ -154,7 +159,7 @@ async fn secret_roll_leaks_no_numbers_to_clients() {
     );
 
     let url = handle.lan_url.clone().expect("host advertises a lan url");
-    let (mut ws, _peer_id) = join(&url, &handle.session_id, "Nosy Player").await;
+    let (mut ws, _peer_id) = join(&url, &handle.session_id, "Nosy Player", handle.service().pin()).await;
 
     // The GM rolls SECRET — the tool acks the numbers to the host only.
     let call = ToolCall {
@@ -210,7 +215,8 @@ async fn client_update_sheet_targeting_gm_pc_is_rejected() {
     let gm_peer = handle.peer_id.clone();
 
     let url = handle.lan_url.clone().expect("host advertises a lan url");
-    let (mut ws, _peer_id) = join(&url, &handle.session_id, "Sneaky Player").await;
+    let (mut ws, _peer_id) =
+        join(&url, &handle.session_id, "Sneaky Player", handle.service().pin()).await;
 
     // The player tries to patch the GM's sheet.
     send_json(
@@ -241,4 +247,79 @@ async fn client_update_sheet_targeting_gm_pc_is_rejected() {
     let character = gm.character.as_ref().expect("gm has a character");
     assert_eq!(character.hp, 18, "gm sheet must be untouched");
     assert_eq!(character.max_hp, 18);
+}
+
+// === Re-host port race (CONTRACT-10_5 § 2) ================================
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rehost_in_process_reuses_port_4780() {
+    use pf2e_companion_lib::session::service::{SessionInfo, SessionRegistry};
+    use pf2e_companion_lib::session::ActiveSession;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let registry = SessionRegistry::new();
+
+    // Host A, installed as the active session. The other tests in this
+    // binary host tables concurrently — if one holds 4780 at our start,
+    // retire the attempt and retry until the canonical port lands.
+    let handle_a: Arc<SessionHandle> = {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+        loop {
+            let h: Arc<SessionHandle> = Arc::new(
+                host(tmp.path(), "rehost-campaign", "GM A", None, no_adventures())
+                    .await
+                    .expect("host A"),
+            );
+            if h.lan_url.as_deref().unwrap_or("").contains(":4780/") {
+                break h;
+            }
+            h.service().shutdown_and_wait().await;
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "port 4780 stayed busy (another table?)"
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    };
+    assert!(
+        handle_a.lan_url.as_deref().unwrap_or("").contains(":4780/"),
+        "host A binds the canonical port: {:?}",
+        handle_a.lan_url
+    );
+    let info_a = SessionInfo {
+        session_id: handle_a.session_id.clone(),
+        peer_id: handle_a.peer_id.clone(),
+        role: Role::Gm,
+        lan_url: handle_a.lan_url.clone(),
+        p2p_ticket: None,
+        name: handle_a.name.clone(),
+        pin: None,
+    };
+    registry.install(ActiveSession {
+        service: handle_a.service(),
+        handle: handle_a.clone(),
+        info: info_a,
+        pin: None,
+    });
+
+    // Tear down IN FULL — the listener + its port are released before
+    // this resolves (CONTRACT-10_5 § 2).
+    registry.take_and_shutdown().await;
+
+    // Host B in the same process must re-bind 4780.
+    let handle_b: Arc<SessionHandle> = Arc::new(
+        host(tmp.path(), "rehost-campaign", "GM B", None, no_adventures())
+            .await
+            .expect("host B"),
+    );
+    let url = handle_b.lan_url.clone().expect("host B advertises a lan url");
+    assert!(
+        url.contains(":4780/"),
+        "host B must re-bind the canonical port: {url}"
+    );
+
+    // And a thin client completes the hello handshake on it.
+    let (mut ws, _peer_id) =
+        join(&url, &handle_b.session_id, "Rejoiner", handle_b.service().pin()).await;
+    let _ = await_frame(&mut ws, "patch", |v| v["kind"] == "snapshot").await;
 }

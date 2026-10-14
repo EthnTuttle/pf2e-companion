@@ -113,6 +113,11 @@ pub struct ChatEntry {
     pub text: String,
     #[serde(default)]
     pub roll: Option<RollRecord>,
+    /// Monotonic per-session sequence (CONTRACT-10_5 § 3) for client-side
+    /// dedupe of `chat_appended` patches. `None` only for pre-10.5
+    /// entries in legacy saves.
+    #[serde(default)]
+    pub seq: Option<u64>,
 }
 
 /// Player-visible info (TS `players` map value). `connected` is additive
@@ -584,6 +589,7 @@ mod tests {
             kind: ChatKind::Chat,
             text: "first".into(),
             roll: None,
+            seq: None,
         });
         let mut post = pre.clone();
         post.chat.push(ChatEntry {
@@ -592,6 +598,7 @@ mod tests {
             kind: ChatKind::Chat,
             text: "second".into(),
             roll: None,
+            seq: None,
         });
         post.players.insert(
             "p1".into(),
