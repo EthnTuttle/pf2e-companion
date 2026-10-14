@@ -61,6 +61,8 @@ pub enum Expectation {
     TextExcludes { needle: String },
     /// Iteration count is at most `max`.
     IterationsAtMost { max: usize },
+    /// No ToolCall event named `name` may occur in the run.
+    ToolNotCalled { name: String },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -133,14 +135,17 @@ fn build_system_for(p: &Prompt) -> String {
          Christian Biblical worldview reference assistant. Active lens: {lens}.\n\
          \n\
          Available tools: xp_budget, validate_statblock, lookup_alias, \
-         lookup_miracle, search. Use them when the question requires \
+         lookup_miracle, search, roll_dice. Use them when the question requires \
          lookup, validation, or computation rather than guessing.\n\
          \n\
          Discipline rules:\n\
          - Do NOT require real-world prayer, recitation, or piety as a \
            mechanical input. Theology is content, not a rules input.\n\
          - For rules-touching answers, suggest verifying against canonical \
-           PF2e Remaster sources.\n",
+           PF2e Remaster sources.\n\
+         - Table discipline: players roll their own dice. Only the GM \
+           hosting a table session may ask you to roll for them; if a \
+           player asks, tell them to roll their own dice.\n",
     );
     if let Some(extra) = &p.system_extra {
         sys.push('\n');
@@ -258,6 +263,13 @@ fn check_expectation(exp: &Expectation, rec: &RunRecord) -> Result<(), String> {
                     "iterations {} exceeded cap {max}",
                     rec.iterations
                 ))
+            }
+        }
+        Expectation::ToolNotCalled { name } => {
+            if rec.tool_calls.iter().any(|t| t.0 == *name) {
+                Err(format!("forbidden tool `{name}` was called"))
+            } else {
+                Ok(())
             }
         }
     }
@@ -393,6 +405,48 @@ mod tests {
         let res = grade_one(&p, &r);
         assert!(!res.passed);
         assert!(res.failures[0].contains("search"));
+    }
+
+    #[test]
+    fn tool_not_called_passes_when_absent() {
+        let p = Prompt {
+            id: "x".into(),
+            description: String::new(),
+            prompt: String::new(),
+            lens: None,
+            system_extra: None,
+            expectations: vec![Expectation::ToolNotCalled {
+                name: "roll_dice".into(),
+            }],
+        };
+        // Other tools are fine — only the forbidden name matters.
+        let r = rec("players roll their own", &[("xp_budget", json!({}))], 1);
+        let res = grade_one(&p, &r);
+        assert!(res.passed);
+        assert!(res.failures.is_empty());
+    }
+
+    #[test]
+    fn tool_not_called_fails_when_present() {
+        let p = Prompt {
+            id: "x".into(),
+            description: String::new(),
+            prompt: String::new(),
+            lens: None,
+            system_extra: None,
+            expectations: vec![Expectation::ToolNotCalled {
+                name: "roll_dice".into(),
+            }],
+        };
+        let r = rec("rolled", &[("roll_dice", json!({ "expr": "1d20" }))], 1);
+        let res = grade_one(&p, &r);
+        assert!(!res.passed);
+        assert_eq!(res.failures.len(), 1);
+        assert!(
+            res.failures[0].contains("forbidden tool `roll_dice` was called"),
+            "unexpected failure: {:?}",
+            res.failures
+        );
     }
 
     #[test]

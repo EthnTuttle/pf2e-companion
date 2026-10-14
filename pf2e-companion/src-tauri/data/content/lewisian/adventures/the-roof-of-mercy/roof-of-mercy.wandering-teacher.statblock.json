@@ -1,0 +1,89 @@
+{
+  "name": "The Wandering Teacher",
+  "title": "Voice of the Open Door",
+  "level": 5,
+  "type": "npc",
+  "lens": "lewisian",
+  "license_provenance": "homebrew",
+  "sanctification": "holy",
+  "traits": ["unique", "medium", "humanoid", "human"],
+  "perception": 15,
+  "languages": ["Common", "Celestial", "Draconic", "Empyreal", "Sylvan", "Aklo"],
+  "skills": {
+    "diplomacy": 17,
+    "religion": 16,
+    "insight": 16,
+    "medicine": 15,
+    "society": 14
+  },
+  "str": 2,
+  "dex": 3,
+  "con": 3,
+  "int": 4,
+  "wis": 5,
+  "cha": 5,
+  "ac": 22,
+  "fort": 13,
+  "ref": 14,
+  "will": 18,
+  "hp": 95,
+  "immunities": [],
+  "resistances": ["mental 5"],
+  "weaknesses": [],
+  "speed": "25 ft.",
+  "melee": [
+    {
+      "name": "Walking Staff",
+      "bonus": 13,
+      "damage": "1d6+3 bludgeoning",
+      "traits": ["reach 10 ft.", "versatile s", "nonlethal"]
+    }
+  ],
+  "ranged": [],
+  "spell_dc": 24,
+  "spell_attack": 15,
+  "spells": {
+    "3": ["heal (at will, 2 actions)", "calm emotions", "see invisibility", "tongues"],
+    "2": ["restoration (lesser)", "status", "zone of truth"],
+    "1": ["bless", "detect alignment", "sanctuary", "soothe"],
+    "cantrips": ["guidance", "light", "stabilize", "detect magic"]
+  },
+  "abilities": [
+    {
+      "name": "Aura of Mercy",
+      "type": "aura",
+      "range": "30 ft.",
+      "description": "Allies in the aura gain a +2 status bonus to saves against fear, emotion, and mental effects. Enemies in the aura take a –1 status penalty to damage rolls. Any creature that reduces an ally to 0 HP in the aura must succeed at a DC 22 Will save or be stunned 1."
+    },
+    {
+      "name": "Forgiveness First",
+      "type": "ability",
+      "action": "2",
+      "frequency": "once per 10 minutes",
+      "description": "The teacher declares forgiveness upon a willing creature within 30 ft. The target is freed from all guilt-based mental effects (including confusion, domination, and fear from moral injury), regains 2d8+10 HP, and gains a +2 status bonus to Will saves for 1 round. This is a divine, emotion, mental, healing effect."
+    },
+    {
+      "name": "Authority to Heal",
+      "type": "ability",
+      "action": "1",
+      "frequency": "once per round",
+      "trigger": "The teacher or an ally within 30 ft. successfully uses Forgiveness First or casts a heal spell on a living creature.",
+      "description": "The target also ends one condition of the teacher's choice: paralyzed, slowed, stunned, or restrained. The teacher says: 'Which is easier?' — the condition ends as divine authority overrides the affliction."
+    },
+    {
+      "name": "Open the Roof",
+      "type": "reaction",
+      "trigger": "An ally within 60 ft. attempts a skill check to overcome a physical or social barrier (locked door, crowded room, sealed border, hostile crowd).",
+      "description": "The teacher speaks a word of permission. The ally rolls twice and takes the better result. If the barrier was maintained by an opposing will (a guard, a ward, a bureaucratic rule), that will must succeed at a DC 24 Will save or the barrier simply ceases to function for 1 round."
+    },
+    {
+      "name": "Teaching Without Walls",
+      "type": "ability",
+      "description": "The teacher does not require a deity's sanction to forgive or heal. Effects that would suppress divine magic (antimagic fields, divine interdiction, anathema violations) do not affect the teacher's spells or abilities. The teacher's power comes from *mercy itself*, not institutional authority."
+    }
+  ],
+  "sources": [
+    "original work — github.com/average-gary/pf2e-companion",
+    "wiki:pf2e-biblical-reskin/roof-of-mercy-scenario § Wandering Teacher"
+  ]
+}

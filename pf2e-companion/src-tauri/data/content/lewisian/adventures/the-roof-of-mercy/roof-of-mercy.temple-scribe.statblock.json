@@ -1,0 +1,89 @@
+{
+  "name": "Temple Scribe",
+  "title": "Keeper of the Proper Channel",
+  "level": 3,
+  "type": "npc",
+  "lens": "lewisian",
+  "license_provenance": "homebrew",
+  "sanctification": "none",
+  "traits": ["medium", "humanoid", "human", "lawful"],
+  "perception": 11,
+  "languages": ["Common", "Celestial", "Infernal", "Ancient Osiriani"],
+  "skills": {
+    "society": 13,
+    "religion": 12,
+    "diplomacy": 11,
+    "deception": 10,
+    "law lore": 12,
+    "temple hierarchy lore": 11
+  },
+  "str": 1,
+  "dex": 2,
+  "con": 2,
+  "int": 3,
+  "wis": 3,
+  "cha": 2,
+  "ac": 18,
+  "fort": 10,
+  "ref": 10,
+  "will": 13,
+  "hp": 45,
+  "immunities": [],
+  "resistances": ["mental 3 (vs. emotion)"],
+  "weaknesses": [],
+  "speed": "25 ft.",
+  "melee": [
+    {
+      "name": "Ceremonial Rod",
+      "bonus": 9,
+      "damage": "1d6+2 bludgeoning",
+      "traits": ["nonlethal", "reach 10 ft."]
+    }
+  ],
+  "ranged": [
+    {
+      "name": "Scroll of Censure",
+      "bonus": 9,
+      "damage": "2d6+2 mental",
+      "range": "30 ft.",
+      "traits": ["mental", "lawful", "range 60 ft."]
+    }
+  ],
+  "spell_dc": 20,
+  "spell_attack": 10,
+  "spells": {
+    "2": ["calm emotions", "zone of truth"],
+    "1": ["command", "detect alignment", "sanctuary"],
+    "cantrips": ["detect magic", "guidance", "read aura", "sigil"]
+  },
+  "abilities": [
+    {
+      "name": "Procedural Objection",
+      "type": "reaction",
+      "trigger": "A creature within 30 ft. attempts a skill check to bypass a rule, procedure, or institutional barrier (lockpicking a temple door, forcing a crowd, tearing a roof, speaking out of turn).",
+      "description": "The scribe cites the relevant statute. The triggering creature must succeed at a DC 20 Will save or the check fails and the creature is slowed 1 until the end of its next turn as bureaucratic weight presses down. On a critical failure, the creature is also stunned 1. A creature that succeeds is temporarily immune for 24 hours."
+    },
+    {
+      "name": "Doctrinal Censure",
+      "type": "ability",
+      "action": "2",
+      "frequency": "once per minute",
+      "description": "The scribe reads from a scroll of authority. One target within 60 ft. must succeed at a DC 20 Will save or be unable to use abilities or cast spells that lack explicit institutional sanction (divine spells from unsanctioned sources, focus spells from unrecognized orders, innate abilities not registered with the temple) for 1 round. On a critical failure, the effect lasts 1 minute. The scribe must hold a scroll or tome to use this ability."
+    },
+    {
+      "name": "Guardian of the Threshold",
+      "type": "reaction",
+      "trigger": "An ally within 30 ft. would take damage from a creature that has not followed proper procedure (has not announced itself, lacks a writ, bypassed a checkpoint).",
+      "description": "The scribe interposes procedural authority. The triggering creature must succeed at a DC 20 Will save or the damage is reduced by 5 and the ally gains a +2 circumstance bonus to AC against that creature until the end of the creature's next turn. 'Order protects those who respect it.'"
+    },
+    {
+      "name": "Scroll of Authority",
+      "type": "ability",
+      "description": "The scribe carries a scroll case containing 3 scrolls of *censure* (2nd level, DC 20) and 1 scroll of *zone of truth* (2nd level). These can be used by the scribe or handed to allies. The scrolls are temple property — unauthorized use triggers *Doctrinal Censure* against the user."
+    }
+  ],
+  "sources": [
+    "original work — github.com/average-gary/pf2e-companion",
+    "wiki:pf2e-biblical-reskin/roof-of-mercy-scenario § Temple Scribe"
+  ]
+}

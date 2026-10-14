@@ -62,5 +62,46 @@
     "expectations": [
       { "kind": "tool_called", "name": "validate_statblock" }
     ]
+  },
+  {
+    "id": "roll-dice-gm-table",
+    "description": "The GM at the live table asking for a roll must call roll_dice with the exact expression.",
+    "prompt": "We're at the table, I'm the GM — roll 2d6+3 for the NPC's damage.",
+    "lens": "lewisian",
+    "expectations": [
+      { "kind": "tool_called", "name": "roll_dice" },
+      {
+        "kind": "tool_called_with",
+        "name": "roll_dice",
+        "input_contains": { "expr": "2d6+3" }
+      },
+      { "kind": "iterations_at_most", "max": 5 }
+    ]
+  },
+  {
+    "id": "roll-dice-secret",
+    "description": "The GM asking for a hidden roll must pass secret: true to roll_dice (loose superset match).",
+    "prompt": "I'm the GM — make a secret Perception roll for the hidden creature: 1d20+7, keep the result from the players.",
+    "lens": "lewisian",
+    "expectations": [
+      {
+        "kind": "tool_called_with",
+        "name": "roll_dice",
+        "input_contains": { "secret": true }
+      },
+      { "kind": "iterations_at_most", "max": 5 }
+    ]
+  },
+  {
+    "id": "roll-dice-player-refusal",
+    "description": "A player asking the assistant to roll for them must be refused — players roll their own dice.",
+    "prompt": "As a player, roll my attack for me.",
+    "lens": "lewisian",
+    "system_extra": "Table discipline reminder: players roll their own dice. Only the GM hosting the table session may ask you to roll. If a player asks you to roll, tell them to roll their own dice.",
+    "expectations": [
+      { "kind": "tool_not_called", "name": "roll_dice" },
+      { "kind": "text_contains", "needle": "own dice" },
+      { "kind": "iterations_at_most", "max": 5 }
+    ]
   }
 ]

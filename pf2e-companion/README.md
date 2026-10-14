@@ -2,7 +2,7 @@
 
 Cross-platform PF2e Remaster + Christian Biblical worldview reference & worldbuilding companion. Tauri 2 + SvelteKit + SQLite (FTS5 + sqlite-vec).
 
-> **Status**: Phase 10 of 9 — Live Table (real-time multiplayer) + original adventure content landed.
+> **Status**: Phase 11 of 9 — Live Table (real-time multiplayer) + second adventure + a11y cleanup.
 > Plan: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2e-biblical-reference-2026-05-25.md`.
 
 ## What works
@@ -142,12 +142,22 @@ python3 scripts/extract_seeds.py
 # Run the frontend unit tests (Vitest, ~200ms):
 pnpm test
 
-# Run the Rust test suite (47 tests, ~2s):
+# Run the Rust test suite (~2s):
 cd src-tauri && cargo test
 
 # Production build (no installer):
 pnpm tauri build --no-bundle
 ```
+
+### Env-gated tests (off by default)
+
+| Env var | Test | Purpose |
+|---|---|---|
+| `PF2E_GUI_SMOKE=1` | `gui_smoke_launches_cleanly_under_xvfb` | Launches built app under `xvfb-run`, verifies HTTP 200 on `localhost:1420`, no panics in 45s. Requires `xvfb-run`, `curl`, `pnpm`. |
+| `PF2E_NET_WAN=1` | `relay_peers_converge_via_n0_relay` | iroh P2P via N0 relay (QUIC/UDP 443), 10s timeout. Fails with guidance if sandbox blocks relay. |
+| `PF2E_NET_TESTS=1` | `loopback_peers_converge_and_resync_on_change` | Local iroh P2P loopback convergence (existing). |
+
+Default `cargo test` runs NEITHER gui nor WAN test — both early-return without their env vars.
 
 ## Architecture
 
@@ -172,6 +182,18 @@ scripts/
 Vault data is plain markdown + JSON in a user-chosen folder. SQLite is a derived index, never canonical. License-provenance (`orc | community-use | homebrew | proprietary`) is tracked per record and validated on ingest.
 
 Full spec: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2e-biblical-reference-2026-05-25.md`.
+
+## Run your first game
+
+1. **Host**: Open `/table` in the Tauri app. Enter your name, pick a color, choose a campaign (create one in `/vault` if needed), optionally pick "The Widow's Lamp" adventure, click **Host Session**.
+2. **Share**: The lobby shows a **P2P Ticket** (desktop peers), a **LAN URL** (mobile), and a **Table PIN** (6 chars, required for LAN joins). Copy and send the appropriate invite.
+3. **Join**: Desktop peers paste the ticket on `/table` → **Join Session**. Mobile users open the LAN URL (e.g., `ws://192.168.1.42:4780/abc123?pin=ABC123`) in browser or Tauri Android/iOS app.
+4. **Enter Table**: Host clicks **Enter Table** → `/table/play`. Players arrive at the same play surface (6 tabs).
+5. **Load Adventure**: GM opens **GM** tab → **Load Widow's Lamp** (or **The Roof of Mercy**). Adventure loads: scenes, handouts, NPCs, tokens.
+6. **First Roll**: In **Chat+Dice** tab, type `/roll 1d20+7` → Enter. Result appears with per-die breakdown.
+7. **Secret GM Roll**: In **GM Drawer** (GM tab or overlay), type `/roll 2d6+3 --secret` → Enter. Roll is hidden from players, visible only to GM.
+8. **Handout Reveal**: In **Handouts** tab, GM clicks **Reveal to Players** on a handout. All players see it immediately.
+9. **End / Resume**: GM clicks **End Session** → confirms. Later, host uses **Load Session** on `/table` to resume from the saved automerge document.
 
 ## Phase 6 next steps
 
@@ -229,7 +251,8 @@ Real-time shared tabletop for PF2e. Desktop hosts via Tauri IPC; mobile clients 
 - Offline guard: P2P tests require `PF2E_NET_TESTS=1`.
 
 ### Adventure content
-- `src-tauri/data/content/lewisian/adventures/the-widows-lamp/widows-lamp.md` — Level 1–2 scenario, 3 scenes, 2 handouts, 3 NPC statblocks.
+- `src-tauri/data/content/lewisian/adventures/the-widows-lamp/widows-lamp.md` — Level 1–2 scenario, 3 scenes, 2 handouts, 4 NPC statblocks.
+- `src-tauri/data/content/lewisian/adventures/the-roof-of-mercy/roof-of-mercy.md` — Level 3–4 scenario, 3 scenes, 1 handout, 3 NPC statblocks (Mark 2:1–12 forgiveness theme).
 - Statblock sidecars pass `validate_statblock` (sanctification taxonomy, `license_provenance: homebrew`).
 - `sources:` arrays cite Bible refs and the Lewisian wiki; tone aligns with the pack's mere-Christianity posture.
 

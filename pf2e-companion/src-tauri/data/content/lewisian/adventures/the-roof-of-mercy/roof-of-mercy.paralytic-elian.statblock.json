@@ -1,0 +1,70 @@
+{
+  "name": "Elian of the Stretcher",
+  "title": "The One Carried Through the Roof",
+  "level": 3,
+  "type": "npc",
+  "lens": "lewisian",
+  "license_provenance": "homebrew",
+  "sanctification": "none",
+  "traits": ["medium", "human", "humanoid"],
+  "perception": 12,
+  "languages": ["Common", "Sign Language (Kestrel's Roost)"],
+  "skills": {
+    "society": 10,
+    "theology": 12,
+    "kestrel's roost lore": 11,
+    "herbalism lore": 9
+  },
+  "str": -1,
+  "dex": -1,
+  "con": 1,
+  "int": 2,
+  "wis": 4,
+  "cha": 3,
+  "ac": 15,
+  "fort": 8,
+  "ref": 6,
+  "will": 14,
+  "hp": 28,
+  "immunities": [],
+  "resistances": ["mental 3 (vs. fear and emotion)"],
+  "weaknesses": [],
+  "speed": "0 ft. (paralyzed, see Tender of the Mat)",
+  "melee": [],
+  "ranged": [],
+  "abilities": [
+    {
+      "name": "Tender of the Mat",
+      "type": "ability",
+      "description": "Elian is permanently paralyzed (lower body) and cannot move himself. He is carried on a stretcher by up to 4 Medium creatures (total Bulk 2). While on the stretcher, he has cover against ranged attacks and his AC benefits from his bearers' positioning. If healed of paralysis, his speed becomes 25 ft. and he gains the *Walk Free* ability below."
+    },
+    {
+      "name": "Walk Free",
+      "type": "ability",
+      "action": "1",
+      "frequency": "once per day",
+      "requirements": "Elian has been healed of paralysis within the last minute.",
+      "description": "Elian stands, rolls up his mat, and walks. For 1 minute, he gains a +10 ft. status bonus to Speed, ignores difficult terrain, and leaves no tracks. Allies within 30 ft. who witness this gain temporary HP equal to Elian's level (3) and a +1 status bonus to saves against fear for 1 round. 'Take up your mat and walk.'"
+    },
+    {
+      "name": "Faith That Tears Roofs",
+      "type": "ability",
+      "description": "Elian's presence inspires those who carry him. Any creature that uses an action to Aid Elian or his bearers (Athletics to carry, Acrobatics to maneuver, Diplomacy to clear a path) gains a +2 circumstance bonus to the check. On a critical success, the bearer also recovers 1d6 HP as hope knits flesh."
+    },
+    {
+      "name": "Prayer of the Open Door",
+      "type": "reaction",
+      "trigger": "An ally within 60 ft. fails a save against a fear, emotion, or mental effect that would compel them to abandon a burden or leave someone behind.",
+      "description": "Elian's prayer steadies them. The ally rerolls the save with a +2 circumstance bonus. If the reroll succeeds, the ally also gains a +1 status bonus to their next Aid check made to help another creature."
+    },
+    {
+      "name": "Carried by Four",
+      "type": "ability",
+      "description": "Elian's four friends (use the *Stretcher-Bearer* statblock below or treat as level 1 humanoid allies) act on his initiative. They have 15 HP each, AC 14, and can only take actions to carry the stretcher, Aid, or protect Elian. If all four are incapacitated, Elian is helpless until new bearers arrive. The friends do not attack."
+    }
+  ],
+  "sources": [
+    "original work — github.com/average-gary/pf2e-companion",
+    "wiki:pf2e-biblical-reskin/roof-of-mercy-scenario § Paralytic Elian"
+  ]
+}

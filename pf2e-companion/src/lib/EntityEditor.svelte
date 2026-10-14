@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { untrack } from "svelte";
   import {
     addRelation,
     createEntity,
@@ -27,21 +28,35 @@
     initialCampaign?: string | null;
   } = $props();
 
-  // Form state
-  let title = $state(entity?.title ?? "");
-  let entityType = $state(entity?.type ?? "npc");
-  let campaign = $state(
-    entity?.frontmatter?.campaign_id?.toString() ??
-      initialCampaign ??
-      campaignState.active ??
-      "",
-  );
-  let lens = $state(entity?.lens ?? lensState.active ?? "lewisian");
-  let licenseProvenance = $state(entity?.license_provenance ?? "homebrew");
-  let body = $state(entity?.body ?? defaultBody(entityType, title));
-  let extraFrontmatter = $state(
-    JSON.stringify(stripCanonical(entity?.frontmatter ?? {}), null, 2),
-  );
+  // Form state — initialized in effect to avoid "captures initial value" warnings
+  let title = $state("");
+  let entityType = $state("npc");
+  let campaign = $state("");
+  let lens = $state("lewisian");
+  let licenseProvenance = $state("homebrew");
+  let body = $state("");
+  let extraFrontmatter = $state("");
+
+  // Initialize form state once from props — untrack global state so init never re-runs on campaign/lens changes
+  $effect.pre(() => {
+    if (entity) {
+      title = entity.title ?? "";
+      entityType = entity.type ?? "npc";
+      campaign = entity.frontmatter?.campaign_id?.toString() ?? initialCampaign ?? untrack(() => campaignState.active) ?? "";
+      lens = entity.lens ?? untrack(() => lensState.active) ?? "lewisian";
+      licenseProvenance = entity.license_provenance ?? "homebrew";
+      body = entity.body ?? defaultBody(entityType, title);
+      extraFrontmatter = JSON.stringify(stripCanonical(entity.frontmatter ?? {}), null, 2);
+    } else {
+      title = "";
+      entityType = "npc";
+      campaign = initialCampaign ?? untrack(() => campaignState.active) ?? "";
+      lens = untrack(() => lensState.active) ?? "lewisian";
+      licenseProvenance = "homebrew";
+      body = defaultBody(entityType, title);
+      extraFrontmatter = "";
+    }
+  });
 
   let saving = $state(false);
   let deleting = $state(false);
@@ -214,27 +229,27 @@
   </header>
 
   {#if error}
-    <p class="err">{error}</p>
+    <p class="err" role="alert">{error}</p>
   {/if}
 
   <div class="grid">
-    <label class="span">
+    <label class="span" for="title-input">
       <span class="lbl">Title</span>
-      <input type="text" bind:value={title} required />
+      <input id="title-input" type="text" bind:value={title} required />
     </label>
 
-    <label>
+    <label for="type-select">
       <span class="lbl">Type</span>
-      <select bind:value={entityType} disabled={mode === "edit"}>
+      <select id="type-select" bind:value={entityType} disabled={mode === "edit"}>
         {#each entityTypeOptions as t (t)}
           <option value={t}>{t}</option>
         {/each}
       </select>
     </label>
 
-    <label>
+    <label for="campaign-select">
       <span class="lbl">Campaign</span>
-      <select bind:value={campaign} disabled={mode === "edit"}>
+      <select id="campaign-select" bind:value={campaign} disabled={mode === "edit"}>
         <option value="">—</option>
         {#each campaignState.campaigns as c (c.id)}
           <option value={c.id}>{c.name}</option>
@@ -242,9 +257,9 @@
       </select>
     </label>
 
-    <label>
+    <label for="lens-select">
       <span class="lbl">Lens</span>
-      <select bind:value={lens}>
+      <select id="lens-select" bind:value={lens}>
         <option value="">(unspecified)</option>
         {#each lensState.manifests as l (l.id)}
           <option value={l.id}>{l.label}</option>
@@ -252,9 +267,9 @@
       </select>
     </label>
 
-    <label>
+    <label for="license-select">
       <span class="lbl">License</span>
-      <select bind:value={licenseProvenance}>
+      <select id="license-select" bind:value={licenseProvenance}>
         {#each licenseOptions as o (o.id)}
           <option value={o.id}>{o.label}</option>
         {/each}
@@ -274,7 +289,7 @@
       <code>status</code>, <code>relations</code>, <code>sources</code>,
       <code>mechanical</code>.
     </p>
-    <textarea bind:value={extraFrontmatter} spellcheck="false" rows="6"></textarea>
+    <textarea id="extra-frontmatter" bind:value={extraFrontmatter} spellcheck="false" rows="6"></textarea>
   </section>
 
   {#if mode === "edit" && entity}
@@ -294,7 +309,7 @@
               <button
                 type="button"
                 class="x"
-                aria-label="remove"
+                aria-label="Remove relation"
                 onclick={() => handleDeleteRelation(r)}
               >×</button>
             </li>
@@ -305,28 +320,36 @@
       {/if}
 
       <div class="new-rel">
-        <input
-          type="text"
-          placeholder="edge (member_of, located_in, …)"
-          bind:value={newRelEdge}
-          onkeydown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleAddRelation(e);
-            }
-          }}
-        />
-        <input
-          type="text"
-          placeholder="target id (e.g. main:faction/house-velerian)"
-          bind:value={newRelTo}
-          onkeydown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleAddRelation(e);
-            }
-          }}
-        />
+        <label for="rel-edge-input">
+          <span class="lbl" style="position:absolute;width:1px;height:1px;overflow:hidden">Edge type</span>
+          <input
+            id="rel-edge-input"
+            type="text"
+            placeholder="edge (member_of, located_in, …)"
+            bind:value={newRelEdge}
+            onkeydown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddRelation(e);
+              }
+            }}
+          />
+        </label>
+        <label for="rel-target-input">
+          <span class="lbl" style="position:absolute;width:1px;height:1px;overflow:hidden">Target ID</span>
+          <input
+            id="rel-target-input"
+            type="text"
+            placeholder="target id (e.g. main:faction/house-velerian)"
+            bind:value={newRelTo}
+            onkeydown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddRelation(e);
+              }
+            }}
+          />
+        </label>
         <button type="button" onclick={handleAddRelation}>Add</button>
       </div>
     </section>
@@ -472,6 +495,7 @@
     cursor: pointer;
     color: var(--muted);
     padding: 0 0.3rem;
+    line-height: 1;
   }
   .x:hover {
     color: #c33;
@@ -481,6 +505,10 @@
     display: grid;
     grid-template-columns: 12rem 1fr auto;
     gap: 0.4rem;
+    align-items: end;
+  }
+  .new-rel label {
+    gap: 0.2rem;
   }
   .new-rel input {
     font-size: 0.85rem;

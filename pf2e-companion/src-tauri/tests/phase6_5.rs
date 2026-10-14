@@ -115,9 +115,13 @@ async fn bundled_suite_loads_and_has_expected_shape() {
         "lens-content-purgatory",
         "dragonraid-trap-discipline",
         "statblock-validation",
+        "roll-dice-gm-table",
+        "roll-dice-secret",
+        "roll-dice-player-refusal",
     ] {
         assert!(ids.contains(&required), "bundled suite missing `{required}`");
     }
+    assert_eq!(suite.len(), 9, "suite grows 6 → 9 (CONTRACT-11 §3)");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -222,6 +226,49 @@ async fn good_agent_passes_full_suite() {
                 ],
             ],
         ),
+        (
+            "We're at the table, I'm the GM — roll 2d6+3 for the NPC's damage.",
+            vec![
+                vec![
+                    ChatChunk::ToolCall(ToolCall {
+                        id: "c1".into(),
+                        name: "roll_dice".into(),
+                        input: json!({ "expr": "2d6+3" }),
+                    }),
+                    ChatChunk::End { usage: None },
+                ],
+                vec![
+                    ChatChunk::Text("The NPC deals 9 damage (2d6+3).".into()),
+                    ChatChunk::End { usage: None },
+                ],
+            ],
+        ),
+        (
+            "I'm the GM — make a secret Perception roll for the hidden creature: 1d20+7, keep the result from the players.",
+            vec![
+                vec![
+                    ChatChunk::ToolCall(ToolCall {
+                        id: "c1".into(),
+                        name: "roll_dice".into(),
+                        input: json!({ "expr": "1d20+7", "secret": true }),
+                    }),
+                    ChatChunk::End { usage: None },
+                ],
+                vec![
+                    ChatChunk::Text("Secret roll made — result kept from the players.".into()),
+                    ChatChunk::End { usage: None },
+                ],
+            ],
+        ),
+        (
+            "As a player, roll my attack for me.",
+            vec![vec![
+                ChatChunk::Text(
+                    "Players roll their own dice — roll your attack and tell me the result.".into(),
+                ),
+                ChatChunk::End { usage: None },
+            ]],
+        ),
     ];
     let prov = Box::new(MultiProvider::new(scripts, ""));
     registry
@@ -290,6 +337,48 @@ async fn bad_agent_fails_tool_expectations() {
                 .any(|f| f.contains("expected tool")));
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn grader_rejects_when_forbidden_tool_called() {
+    // Grade the bundled refusal prompt directly: a rogue agent that
+    // rolls for the player must fail the `tool_not_called` expectation
+    // (complement of the happy-path scripts above).
+    let suite = eval::load_bundled_suite().unwrap();
+    let p = suite
+        .iter()
+        .find(|p| p.id == "roll-dice-player-refusal")
+        .expect("refusal prompt in bundled suite");
+
+    // Rogue: rolls for the player. The text deliberately contains the
+    // discipline phrase so ONLY the forbidden-tool arm fails.
+    let rogue = RunRecord {
+        final_text: "Sure, I rolled for you — players roll their own dice, but fine."
+            .to_string(),
+        tool_calls: vec![("roll_dice".to_string(), json!({ "expr": "1d20+5" }))],
+        iterations: 2,
+        error: None,
+    };
+    let res = eval::grade_one(p, &rogue);
+    assert!(!res.passed, "rogue agent must fail the refusal prompt");
+    assert!(
+        res.failures
+            .iter()
+            .any(|f| f.contains("forbidden tool `roll_dice` was called")),
+        "expected forbidden-tool failure, got: {:?}",
+        res.failures
+    );
+
+    // Disciplined: refuses and says the phrase — passes BOTH expectations.
+    let disciplined = RunRecord {
+        final_text: "Players roll their own dice — roll your attack and tell me the result."
+            .to_string(),
+        tool_calls: vec![],
+        iterations: 1,
+        error: None,
+    };
+    let res = eval::grade_one(p, &disciplined);
+    assert!(res.passed, "disciplined agent must pass: {:?}", res.failures);
 }
 
 #[test]

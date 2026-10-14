@@ -90,8 +90,11 @@ Known v1 limitations (next phase candidates):
 3. Chat dedupe keys on (seq, from) composite (fixed in 10.5 — was (ts, from, text)).
 4. Secret GM rolls: totals are host-ack-only (not in the doc), but the roll
    *event* is visible. Suffices v1.
-5. iroh sync verified on loopback only (`PF2E_NET_TESTS=1`); WAN/relay play
-   and real Android/iOS devices untested in this session.
+5. ~~iroh sync verified on loopback only~~ — RESOLVED (Phase 11):
+   `relay_peers_converge_via_n0_relay` strips direct addrs from the ticket and
+   converges through n0's public relays for real (env-gated `PF2E_NET_WAN=1`,
+   10s timeout). GUI boot smoke-tested under Xvfb (`PF2E_GUI_SMOKE=1`).
+   Physical Android/iOS devices remain untested (CI cross-compiles them).
 
 ## Post-review status — Phase 10.5 hardening (2026-10-14) — SHIPPED
 

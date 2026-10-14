@@ -235,3 +235,84 @@ fn bundled_widows_lamp_parses_via_content_loader() {
         );
     }
 }
+
+// === Count-agnostic bundled-adventure sweep (CONTRACT-11 §4) =============
+
+static CONTENT_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/data/content");
+
+/// Collect every `adventures/<dir>/*.md` in the embedded content tree,
+/// paired with its containing [`Dir`] (sidecars resolve within it).
+/// Count-agnostic: a second pack may land at any time and is picked up
+/// automatically.
+fn collect_adventure_files<'a>(
+    dir: &'a Dir<'a>,
+    out: &mut Vec<(&'a Dir<'a>, &'a include_dir::File<'a>)>,
+) {
+    for entry in dir.entries() {
+        match entry {
+            include_dir::DirEntry::Dir(d) => collect_adventure_files(d, out),
+            include_dir::DirEntry::File(f) => {
+                // An adventure md lives at <lens>/adventures/<dir>/<stem>.md —
+                // i.e. its containing dir is a direct child of `adventures`.
+                let in_adventures_dir = dir
+                    .path()
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .is_some_and(|n| n == "adventures");
+                let is_md = f.path().extension().is_some_and(|e| e == "md");
+                if in_adventures_dir && is_md {
+                    out.push((dir, f));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn bundled_adventures_all_parse_and_validate() {
+    // Enumerate every bundled adventure (both packs, whenever they
+    // land), parse + validate each against the strict v1 rules.
+    let mut found = 0;
+    let mut files = Vec::new();
+    collect_adventure_files(&CONTENT_DIR, &mut files);
+    for (dir, file) in files {
+        let path = file.path().display();
+        let stem = file
+            .path()
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_else(|| panic!("{path}: non-utf8 stem"));
+        let raw = file
+            .contents_utf8()
+            .unwrap_or_else(|| panic!("{path}: non-utf8 contents"));
+        let (fm, body) = split_frontmatter(raw);
+        let fm: serde_yaml::Value = serde_yaml::from_str(fm)
+            .unwrap_or_else(|e| panic!("{path}: frontmatter parse: {e}"));
+        let fm = match fm {
+            serde_yaml::Value::Mapping(m) => m,
+            other => panic!("{path}: frontmatter not a mapping: {other:?}"),
+        };
+        let def: AdventureDef = adventure::parse_adventure(&fm, body, dir, stem)
+            .unwrap_or_else(|e| panic!("{path}: parse: {e}"));
+        let problems = adventure::validate_adventure(&def);
+        assert!(
+            problems.is_empty(),
+            "{path}: validation problems: {problems:?}"
+        );
+        // Every npc sidecar must independently pass validate_statblock.
+        for npc in &def.npcs {
+            let result = pf2e_companion_lib::rules::validate_statblock(&npc.statblock);
+            assert!(
+                result.valid,
+                "{path}: sidecar `{}` invalid: {:?}",
+                npc.slug,
+                result.errors
+            );
+        }
+        found += 1;
+    }
+    assert!(
+        found >= 2,
+        "expected >= 2 bundled adventures (widows-lamp + roof-of-mercy), found {found}"
+    );
+}
