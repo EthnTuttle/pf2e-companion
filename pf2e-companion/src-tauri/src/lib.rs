@@ -15,6 +15,7 @@ mod commands;
 pub mod content;
 pub mod db;
 pub mod dice;
+pub mod diagnostics;
 pub mod eval;
 mod foundry;
 mod keystore;
@@ -40,6 +41,9 @@ pub fn run() {
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "info,pf2e_companion_lib=debug".into()),
         )
+        // Tee every fmt byte to stderr (byte-identical console output)
+        // and into the diagnostics hub's ring + session file.
+        .with_writer(diagnostics::TeeWriter::new(diagnostics::hub().clone()))
         .try_init()
         .ok();
 
@@ -117,6 +121,7 @@ pub fn run() {
             commands::session_load,
             commands::session_list_saved,
             commands::session_export_log,
+            commands::diagnostics_get,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -893,6 +893,17 @@ pub async fn session_export_log(
     Ok(path.display().to_string())
 }
 
+/// Paste-ready diagnostics blob (version, OS, arch, active session, last
+/// ≤2,000 log lines) for the Settings "Copy diagnostics" button. No
+/// telemetry — the blob only leaves the machine when the user pastes it.
+#[tauri::command]
+pub fn diagnostics_get(
+    registry: State<'_, Arc<SessionRegistry>>,
+) -> Result<crate::diagnostics::DiagnosticsInfo, String> {
+    let active = registry.get().map(|s| s.handle.session_id.clone());
+    Ok(crate::diagnostics::hub().blob(active.as_deref()))
+}
+
 /// The 5 v1 lens packs. Phase 1 returns the manifest; the actual content
 /// packs land in Phase 2 alongside the YHWH and saint entries.
 #[tauri::command]

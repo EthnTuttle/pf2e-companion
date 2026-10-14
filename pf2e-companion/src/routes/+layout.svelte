@@ -26,6 +26,7 @@
     <div class="pickers">
       <a class="about-link" href="/about" title="About this app">About</a>
       <a class="about-link" href="/chat" title="Chat (optional LLM)">Chat</a>
+      <a class="about-link" href="/settings" title="Settings and diagnostics">Settings</a>
       <label class="picker">
         <span>Campaign</span>
         <select

@@ -479,3 +479,20 @@ export const sessionListSaved = () => invoke<SavedSessionSummary[]>("session_lis
  */
 export const sessionExportLog = (sessionId: string, destPath: string | null = null) =>
   invoke<string>("session_export_log", { sessionId, destPath });
+
+// === Diagnostics (SHIPPING Tier 1 item 4) ================================
+
+export interface DiagnosticsInfo {
+  app_version: string;
+  os: string;
+  arch: string;
+  session_id: string | null;
+  lines: string[];
+}
+
+/**
+ * Paste-ready diagnostics blob (version, OS, arch, active session, last
+ * ≤2,000 log lines). No telemetry — it only leaves the machine when the
+ * user pastes it.
+ */
+export const diagnosticsGet = () => invoke<DiagnosticsInfo>("diagnostics_get");

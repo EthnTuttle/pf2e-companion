@@ -150,6 +150,17 @@ cd src-tauri && cargo test
 pnpm tauri build --no-bundle
 ```
 
+### Diagnostics (no telemetry)
+
+`/settings` (topbar → Settings) has a **Copy diagnostics** button that puts a
+paste-ready markdown blob on your clipboard — app version, OS, arch, active
+session, and the last 2,000 log lines from the in-memory ring. Nothing is ever
+sent anywhere; the blob only leaves your machine when you paste it (e.g. into
+a GitHub issue). Hosting or resuming a session also appends to a per-session
+log twin at `<vault>/campaigns/<id>/sessions/<session-id>.log` (the `.log`
+extension keeps it out of the vault watcher); peers keep ring-only logging —
+the host files the bug reports.
+
 ### Env-gated tests (off by default)
 
 | Env var | Test | Purpose |

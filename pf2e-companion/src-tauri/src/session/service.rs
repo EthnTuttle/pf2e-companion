@@ -127,6 +127,8 @@ impl SessionService {
         for task in tasks {
             task.abort();
         }
+        // Diagnostics: stop the per-session log sink (ring keeps rolling).
+        crate::diagnostics::hub().clear_session();
     }
 
     /// Signal + abort + AWAIT all registered tasks (frees ports before
@@ -141,6 +143,10 @@ impl SessionService {
         for t in tasks {
             let _ = t.await; // JoinHandle resolves after abort
         }
+        // Diagnostics: stop the per-session log sink (ring keeps rolling).
+        // Mirrors `shutdown()` — this is the teardown path used by
+        // `take_and_shutdown` (session_leave / session_load / re-host).
+        crate::diagnostics::hub().clear_session();
     }
 
     pub fn session_id(&self) -> String {
@@ -512,6 +518,8 @@ pub async fn host(
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("create {}", dir.display()))?;
     let save_path = dir.join(format!("{session_id}.automerge"));
+    // Diagnostics: durable twin of the ring buffer for this host session.
+    crate::diagnostics::hub().set_session(&save_path.with_extension("log"));
 
     let svc = SessionService::new(doc, Some(save_path), adventures, Some(gen_pin()));
     svc.save_now().context("initial session save")?;
@@ -608,6 +616,8 @@ pub async fn load(
         .join(format!("{session_id}.automerge"));
     let bytes = std::fs::read(&path)
         .with_context(|| format!("read {}", path.display()))?;
+    // Diagnostics: resume logging into the session's `.log` twin.
+    crate::diagnostics::hub().set_session(&path.with_extension("log"));
     let doc = super::SessionDoc::load(&bytes)?;
     let real_session_id = doc.session_id().to_string();
     let peer_id = Uuid::new_v4().to_string();
