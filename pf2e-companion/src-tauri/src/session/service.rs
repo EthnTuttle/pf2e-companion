@@ -474,7 +474,7 @@ impl Default for SessionRegistry {
 
 /// Reject anything that escapes the campaign root (mirrors
 /// vault_write::safe_segment).
-fn safe_segment(seg: &str) -> Result<()> {
+pub(super) fn safe_segment(seg: &str) -> Result<()> {
     if seg.is_empty()
         || seg.contains('/')
         || seg.contains('\\')
@@ -504,6 +504,7 @@ pub async fn host(
         gm_id: peer_id.clone(),
         created_at: super::doc::now_ms(),
         adventure_slug: None,
+        ended: false,
     };
     let doc = SharedDoc::new(super::SessionDoc::new_session(meta));
 

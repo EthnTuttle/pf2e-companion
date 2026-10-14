@@ -223,6 +223,7 @@ fn bundled_widows_lamp_parses_via_content_loader() {
             gm_id: "gm".into(),
             created_at: 0,
             adventure_slug: None,
+            ended: false,
         },
     );
     doc.apply_adventure(&def, "widows-lamp").unwrap();

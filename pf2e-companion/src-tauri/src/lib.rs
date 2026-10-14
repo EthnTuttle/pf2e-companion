@@ -45,6 +45,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // App-data directory (per-platform; resolves correctly on iOS/Android too).
             let app_data = app
@@ -114,6 +115,8 @@ pub fn run() {
             commands::session_snapshot,
             commands::session_leave,
             commands::session_load,
+            commands::session_list_saved,
+            commands::session_export_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

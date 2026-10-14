@@ -18,6 +18,7 @@ fn meta(id: &str) -> SessionMeta {
         gm_id: "gm-peer".to_string(),
         created_at: 1_700_000_000_000,
         adventure_slug: None,
+        ended: false,
     }
 }
 

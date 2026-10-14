@@ -90,14 +90,14 @@ fn handle_event(event: &Event, vault_root: &Path, db: &Db) -> Result<()> {
     match event.kind {
         EventKind::Create(_) | EventKind::Modify(_) => {
             for path in &event.paths {
-                if is_markdown(path) {
+                if is_markdown(path) && !is_session_artifact(path) {
                     ingest_file(path, vault_root, db)?;
                 }
             }
         }
         EventKind::Remove(_) => {
             for path in &event.paths {
-                if is_markdown(path) {
+                if is_markdown(path) && !is_session_artifact(path) {
                     delete_by_path(path, vault_root, db)?;
                 }
             }
@@ -110,7 +110,7 @@ fn handle_event(event: &Event, vault_root: &Path, db: &Db) -> Result<()> {
 fn sweep(vault_root: &Path, db: &Db) -> Result<()> {
     let mut count = 0usize;
     walk(vault_root, &mut |path: &Path| -> Result<()> {
-        if is_markdown(path) {
+        if is_markdown(path) && !is_session_artifact(path) {
             ingest_file(path, vault_root, db)?;
             count += 1;
         }
@@ -149,6 +149,13 @@ fn is_markdown(path: &Path) -> bool {
         path.extension().and_then(|s| s.to_str()),
         Some("md") | Some("markdown")
     )
+}
+
+/// Session artifacts live under any `sessions/` directory (exported
+/// `.log.md` transcripts). They are derived files with no vault
+/// frontmatter — ingesting them would hard-reject and churn warnings.
+fn is_session_artifact(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str() == "sessions")
 }
 
 fn ingest_file(path: &Path, vault_root: &Path, db: &Db) -> Result<()> {
@@ -416,5 +423,22 @@ mod tests {
         assert!(plain.contains("Bold"));
         assert!(plain.contains("code"));
         assert!(!plain.contains("**"));
+    }
+
+    #[test]
+    fn session_artifacts_are_excluded_from_ingest_guards() {
+        let artifact = Path::new("campaigns/c1/sessions/s1.log.md");
+        assert!(is_session_artifact(artifact), "exported logs are session artifacts");
+        // Guard composition: markdown + session artifact → skipped.
+        assert!(is_markdown(artifact) && is_session_artifact(artifact));
+
+        let note = Path::new("campaigns/c1/notes.md");
+        assert!(!is_session_artifact(note), "regular vault markdown is not an artifact");
+        assert!(is_markdown(note) && !is_session_artifact(note));
+
+        // `.automerge` saves were never indexed (extension filter) — unchanged.
+        let automerge = Path::new("campaigns/c1/sessions/s1.automerge");
+        assert!(is_session_artifact(automerge));
+        assert!(!is_markdown(automerge));
     }
 }

@@ -194,7 +194,8 @@ Full spec: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2
 6. **First Roll**: In **Chat+Dice** tab, type `/roll 1d20+7` → Enter. Result appears with per-die breakdown.
 7. **Secret GM Roll**: In **GM Drawer** (GM tab or overlay), type `/roll 2d6+3 --secret` → Enter. Roll is hidden from players, visible only to GM.
 8. **Handout Reveal**: In **Handouts** tab, GM clicks **Reveal to Players** on a handout. All players see it immediately.
-9. **End / Resume**: GM clicks **End Session** → confirms. Later, host uses **Load Session** on `/table` to resume from the saved automerge document.
+9. **End / Resume**: GM clicks **End Session** → confirms. Later, host uses the **Saved Sessions** list on `/table` to **Resume** from the saved automerge document.
+10. **Export session log**: From the GM drawer (**GM → Tools → Export session log**) or the lobby's **Saved Sessions** list, export a markdown transcript (header, roster, chat + dice, handouts) via a save-as dialog. If the dialog is unavailable (e.g. some mobile setups), the log falls back to `<vault>/campaigns/<id>/sessions/<session-id>.log.md` and the path is shown. Cancelling writes nothing.
 
 ## Phase 6 next steps
 
@@ -269,6 +270,12 @@ src/
     transport.ts    + two-backend Transport interface (ipcTransport, wsTransport, mockTransport, createTransport)
     session.svelte.ts  reactive store (applyPatch reducer, derived state, sendIntent)
   routes/
-    table/+page.svelte           lobby (host/join/invite)
+    table/+page.svelte           lobby (host/join/invite, saved sessions)
     table/play/+page.svelte      play surface (6 tabs, grid, dice, sheets)
 ```
+
+## Support
+
+Development tips appreciated: **average@minibits.cash** (Lightning Address, via the repo's Sponsor button).
+
+Tips only — no store, no accounts, nothing in-app. `docs/research/nostr-integration-analysis.md` explains why monetization deliberately stays outside the app (app-store policy + the out-of-scope list in `docs/SHIPPING.md`).

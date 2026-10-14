@@ -863,6 +863,36 @@ pub async fn session_leave(registry: State<'_, Arc<SessionRegistry>>) -> Result<
     Ok(())
 }
 
+/// Every saved session across all campaigns (lobby list). Corrupt saves
+/// are skipped, never fail the listing.
+#[tauri::command]
+pub fn session_list_saved(
+    vault: State<'_, Arc<VaultRoot>>,
+) -> Result<Vec<session::SavedSessionSummary>, String> {
+    session::export::list_saved(&vault.0).map_err(|e| e.to_string())
+}
+
+/// Export a session log (markdown transcript). `dest_path: None` writes
+/// to the vault-default location next to the canonical `.automerge`.
+/// Flushes a live session first so ≤2 s of debounced chat makes it in.
+#[tauri::command]
+pub async fn session_export_log(
+    session_id: String,
+    dest_path: Option<String>,
+    vault: State<'_, Arc<VaultRoot>>,
+    registry: State<'_, Arc<SessionRegistry>>,
+) -> Result<String, String> {
+    if let Some(active) = registry.get() {
+        if active.service.session_id() == session_id {
+            active.service.save_now().map_err(|e| e.to_string())?;
+        }
+    }
+    let dest = dest_path.map(PathBuf::from);
+    let path = session::export::export_log(&vault.0, &session_id, dest.as_deref())
+        .map_err(|e| e.to_string())?;
+    Ok(path.display().to_string())
+}
+
 /// The 5 v1 lens packs. Phase 1 returns the manifest; the actual content
 /// packs land in Phase 2 alongside the YHWH and saint entries.
 #[tauri::command]

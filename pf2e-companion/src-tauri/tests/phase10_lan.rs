@@ -32,6 +32,7 @@ async fn setup_with_pin(pin: Option<&str>) -> (Arc<SessionService>, u16) {
         gm_id: "gm-peer".to_string(),
         created_at: 1_700_000_000_000,
         adventure_slug: None,
+        ended: false,
     };
     let svc = SessionService::new(
         SharedDoc::new(SessionDoc::new_session(meta)),

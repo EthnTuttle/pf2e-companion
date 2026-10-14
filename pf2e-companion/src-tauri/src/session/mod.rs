@@ -5,6 +5,7 @@
 //! patch/presence wrappers exactly like `LlmTokenEvent`.
 
 pub mod doc;
+pub mod export;
 pub mod service;
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,7 @@ use std::collections::BTreeMap;
 use thiserror::Error;
 
 pub use doc::{SessionDoc, SessionMeta, SharedDoc};
+pub use export::SavedSessionSummary;
 pub use service::{
     ActiveSession, SessionHandle, SessionInfo, SessionRegistry, SessionService,
 };
@@ -177,6 +179,10 @@ pub struct SessionMetaSnapshot {
     pub created_at: i64,
     #[serde(default)]
     pub adventure_slug: Option<String>,
+    /// Set by `EndSession`. Additive (v1.1): absent = not ended (legacy
+    /// saves / wire payloads).
+    #[serde(default)]
+    pub ended: bool,
 }
 
 /// The full v1 session state (TS `SessionSnapshot`).
@@ -476,6 +482,7 @@ impl Default for SessionSnapshot {
                 gm_id: String::new(),
                 created_at: 0,
                 adventure_slug: None,
+                ended: false,
             },
             players: BTreeMap::new(),
             chat: Vec::new(),
@@ -581,6 +588,7 @@ mod tests {
             gm_id: "g".into(),
             created_at: 0,
             adventure_slug: None,
+            ended: false,
         };
         let mut pre = SessionSnapshot { meta, ..Default::default() };
         pre.chat.push(ChatEntry {
