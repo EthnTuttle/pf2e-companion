@@ -149,6 +149,56 @@ struct ParsedBundled {
     hash: String,
 }
 
+/// Adventure def attach for `type: adventure` entities (real build).
+#[cfg(not(test))]
+fn adventure_statblock(
+    combined: &serde_yaml::Mapping,
+    body: &str,
+    pack_dir: &Dir<'_>,
+    adventure_dir: Option<&Dir<'_>>,
+    stem: &str,
+    id: &str,
+    fallback: Option<String>,
+) -> Option<String> {
+    // Sidecars resolve within the adventure's own dir, anchored by the
+    // adventure stem (CONTRACT § 5); fall back to the pack dir when the
+    // entity somehow has no directory of its own.
+    let dir = adventure_dir.unwrap_or(pack_dir);
+    match crate::adventure::parse_adventure(combined, body, dir, stem) {
+        Ok(def) => {
+            let problems = crate::adventure::validate_adventure(&def);
+            if problems.is_empty() {
+                tracing::debug!(id, "bundled adventure parsed");
+            } else {
+                tracing::warn!(
+                    id,
+                    problems = problems.join("; "),
+                    "bundled adventure validation issues"
+                );
+            }
+            serde_json::to_string(&def).ok()
+        }
+        Err(e) => {
+            tracing::warn!(id, error = %e, "failed to parse bundled adventure; skipping def");
+            fallback
+        }
+    }
+}
+
+/// Standalone (#[path]-included) compilations skip the adventure hook.
+#[cfg(test)]
+fn adventure_statblock(
+    _combined: &serde_yaml::Mapping,
+    _body: &str,
+    _pack_dir: &Dir<'_>,
+    _adventure_dir: Option<&Dir<'_>>,
+    _stem: &str,
+    _id: &str,
+    fallback: Option<String>,
+) -> Option<String> {
+    fallback
+}
+
 fn parse_one(
     path: &Path,
     raw: &str,
@@ -183,6 +233,9 @@ fn parse_one(
 
     // Re-emit frontmatter as JSON for searchability.
     let mut combined = serde_yaml::Mapping::new();
+    // `id` is needed downstream (adventure parsing looks it up in the
+    // mapping) and is useful in the searchable frontmatter JSON too.
+    combined.insert("id".into(), id.clone().into());
     if let Some(t) = fm.title.as_ref() {
         combined.insert("title".into(), t.clone().into());
     }
@@ -194,7 +247,8 @@ fn parse_one(
         combined.insert(k, v);
     }
     let fm_value: Value =
-        serde_yaml::from_value(serde_yaml::Value::Mapping(combined)).unwrap_or(Value::Null);
+        serde_yaml::from_value(serde_yaml::Value::Mapping(combined.clone()))
+            .unwrap_or(Value::Null);
     let frontmatter_json = serde_json::to_string(&fm_value)?;
 
     let body_text = strip_markdown(body);
@@ -209,6 +263,23 @@ fn parse_one(
         .as_deref()
         .and_then(|sp| pack_dir.get_file(sp))
         .map(|f| String::from_utf8_lossy(f.contents()).into_owned());
+
+    // Phase 10 — adventure entities: parse the full def (scenes /
+    // handouts / npc sidecars, CONTRACT § 5) and store it in the
+    // statblock column so the `load_adventure` IPC path can re-read it.
+    // Log-and-skip on failure — bundled content never panics startup.
+    // (Legacy phase tests compile this module standalone via #[path];
+    // the hook needs the full crate tree and is cfg'd out there.)
+    let statblock_json = if entity_type == "adventure" {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let adventure_dir = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .and_then(|p| pack_dir.get_dir(p));
+        adventure_statblock(&combined, body, pack_dir, adventure_dir, stem, &id, statblock_json)
+    } else {
+        statblock_json
+    };
 
     let file_path = format!("bundled:{}", path.display());
     let hash = simple_hash(raw);

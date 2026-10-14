@@ -1,0 +1,79 @@
+{
+  "name": "The Lamplighter",
+  "title": "Keeper of the First Watch",
+  "level": 5,
+  "type": "npc",
+  "lens": "lewisian",
+  "license_provenance": "homebrew",
+  "traits": ["unique", "medium", "celestial", "humanoid"],
+  "perception": 13,
+  "languages": ["Celestial", "Common", "Draconic", "Empyreal"],
+  "skills": {
+    "diplomacy": 15,
+    "religion": 14,
+    "insight": 13,
+    "stealth": 13
+  },
+  "str": 3,
+  "dex": 4,
+  "con": 2,
+  "int": 2,
+  "wis": 4,
+  "cha": 4,
+  "ac": 21,
+  "fort": 11,
+  "ref": 14,
+  "will": 16,
+  "hp": 85,
+  "immunities": ["light"],
+  "resistances": ["fire 5", "poison 5"],
+  "speed": "25 ft.",
+  "melee": [
+    {
+      "name": "Lantern Staff",
+      "bonus": 13,
+      "damage": "1d6+4 bludgeoning plus 1d6 fire",
+      "traits": ["reach 10 ft.", "versatile s"]
+    }
+  ],
+  "ranged": [
+    {
+      "name": "Searing Ray",
+      "bonus": 14,
+      "damage": "2d6+4 fire",
+      "range": "60 ft.",
+      "traits": ["light"]
+    }
+  ],
+  "spell_dc": 22,
+  "spell_attack": 14,
+  "spells": {
+    "3": ["light (at will)", "continual flame", "daylight"],
+    "2": ["calm emotions", "see invisibility", "status"],
+    "1": ["bless", "detect alignment", "sanctuary"]
+  },
+  "abilities": [
+    {
+      "name": "Aura of the First Watch",
+      "type": "aura",
+      "range": "30 ft.",
+      "description": "Allies in the aura gain a +1 status bonus to saves against fear and emotion effects. Fiends and undead in the aura take a –1 status penalty to attack rolls."
+    },
+    {
+      "name": "Lamp's Blessing",
+      "type": "ability",
+      "action": "2",
+      "frequency": "once per hour",
+      "description": "The Lamplighter touches a willing creature's light source. For 10 minutes, that light suppresses magical darkness of level 3 or lower and grants allies in its radius fast healing 2."
+    },
+    {
+      "name": "Legalistic Immunity",
+      "type": "ability",
+      "description": "The Lamplighter is immune to effects that would bind them by contract, oath, or legal compulsion (including dominate, geas, and infernal contracts)."
+    }
+  ],
+  "sources": [
+    "original work — github.com/average-gary/pf2e-companion",
+    "wiki:pf2e-biblical-reskin/widows-lamp-scenario § Lamplighter"
+  ]
+}

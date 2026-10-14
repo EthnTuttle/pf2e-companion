@@ -10,6 +10,9 @@ use crate::llm::{self, LlmConfig, LlmRegistry, LlmStatus, Message};
 use crate::llm_tools::{self, AgentEvent};
 use crate::rag;
 use crate::rules::{self, Difficulty};
+use crate::session::{
+    self, Intent, Role, SessionInfo, SessionRegistry, SessionSnapshot, SessionHandle,
+};
 use crate::vault_write::{
     self, Campaign, CrudResult, EntityInput, EntityPatch, RelationRow, VaultRoot,
 };
@@ -527,6 +530,7 @@ pub async fn llm_chat(
     app: tauri::AppHandle,
     db: State<'_, Arc<Db>>,
     llm: State<'_, Arc<LlmRegistry>>,
+    sessions: State<'_, Arc<SessionRegistry>>,
 ) -> Result<String, String> {
     let session_id = Uuid::new_v4().to_string();
     let session = session_id.clone();
@@ -536,8 +540,15 @@ pub async fn llm_chat(
     let messages = request.messages;
     let system = request.system.unwrap_or_default();
 
+    // Phase 10: while a GM-hosted table session is active, the agent
+    // gains the `roll_dice` tool (applied as the GM peer).
+    let table_session = sessions
+        .get()
+        .filter(|s| s.handle.role == Role::Gm)
+        .map(|s| s.handle.clone());
+
     tokio::spawn(async move {
-        let mut rx = llm_tools::run_agent(
+        let mut rx = llm_tools::run_agent_with_session(
             db_arc,
             llm_arc,
             messages,
@@ -545,6 +556,7 @@ pub async fn llm_chat(
             request.cache_system,
             request.temperature,
             request.max_tokens,
+            table_session,
         );
 
         while let Some(item) = rx.recv().await {
@@ -673,6 +685,173 @@ pub async fn eval_run(
     eval::run_bundled(db_arc, llm_arc)
         .await
         .map_err(|e| e.to_string())
+}
+
+// === Phase 10 — Live Table ================================================
+
+/// Forward broadcaster events to the Tauri event channels
+/// (`session:patch` / `session:presence`), same emit permission as
+/// `llm:token`.
+fn spawn_session_forwarder(app: &tauri::AppHandle, handle: &Arc<SessionHandle>) {
+    use crate::session::doc::SessionEvent;
+    let mut rx = handle.service().subscribe();
+    let mut shutdown = handle.service().shutdown_rx();
+    let app = app.clone();
+    let service = handle.service();
+    let task = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                event = rx.recv() => {
+                    match event {
+                        Ok(SessionEvent::Patch(p)) => {
+                            let _ = app.emit("session:patch", p);
+                        }
+                        Ok(SessionEvent::Presence(p)) => {
+                            let _ = app.emit("session:presence", p);
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            tracing::warn!(skipped = n, "session event forwarder lagged");
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+                res = shutdown.changed() => {
+                    // Session retired — stop forwarding patches so a
+                    // stale doc can't pollute the next session's UI.
+                    if res.is_err() || *shutdown.borrow() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    service.register_task(task);
+}
+
+fn install_session(
+    app: &tauri::AppHandle,
+    registry: &Arc<SessionRegistry>,
+    handle: Arc<SessionHandle>,
+) -> Result<SessionInfo, String> {
+    let info = SessionInfo {
+        session_id: handle.session_id.clone(),
+        peer_id: handle.peer_id.clone(),
+        role: handle.role,
+        lan_url: handle.lan_url.clone(),
+        p2p_ticket: handle.p2p_ticket.clone(),
+        name: handle.name.clone(),
+    };
+    spawn_session_forwarder(app, &handle);
+    registry.install(session::ActiveSession {
+        service: handle.service(),
+        handle,
+        info: info.clone(),
+    });
+    Ok(info)
+}
+
+/// Host a live-table session. Spawns the LAN bridge (feature `lan`) and
+/// the iroh endpoint (feature `p2p`), persists under
+/// `<vault>/campaigns/<campaign_id>/sessions/`.
+#[tauri::command]
+pub async fn session_host(
+    campaign_id: String,
+    name: String,
+    adventure_slug: Option<String>,
+    app: tauri::AppHandle,
+    vault: State<'_, Arc<VaultRoot>>,
+    db: State<'_, Arc<Db>>,
+    registry: State<'_, Arc<SessionRegistry>>,
+) -> Result<SessionInfo, String> {
+    let adventures = session::service::db_adventures((*db).clone());
+    let handle = session::service::host(
+        &vault.0,
+        &campaign_id,
+        &name,
+        adventure_slug.as_deref(),
+        adventures,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    install_session(&app, &registry, Arc::new(handle))
+}
+
+/// Join a hosted session via its iroh endpoint ticket (feature `p2p`).
+#[tauri::command]
+pub async fn session_join_peer(
+    ticket: String,
+    name: String,
+    app: tauri::AppHandle,
+    registry: State<'_, Arc<SessionRegistry>>,
+) -> Result<SessionInfo, String> {
+    #[cfg(feature = "p2p")]
+    {
+        let handle = session::service::join_peer(&ticket, &name, session::service::no_adventures())
+            .await
+            .map_err(|e| e.to_string())?;
+        install_session(&app, &registry, Arc::new(handle))
+    }
+    #[cfg(not(feature = "p2p"))]
+    {
+        let _ = (ticket, name, app, registry);
+        Err("p2p support is disabled in this build".to_string())
+    }
+}
+
+/// Resume a persisted session as GM.
+#[tauri::command]
+pub async fn session_load(
+    campaign_id: String,
+    session_id: String,
+    name: Option<String>,
+    app: tauri::AppHandle,
+    vault: State<'_, Arc<VaultRoot>>,
+    db: State<'_, Arc<Db>>,
+    registry: State<'_, Arc<SessionRegistry>>,
+) -> Result<SessionInfo, String> {
+    let adventures = session::service::db_adventures((*db).clone());
+    let gm_name = name.unwrap_or_else(|| "GM".to_string());
+    let handle =
+        session::service::load(&vault.0, &campaign_id, &session_id, &gm_name, adventures)
+            .await
+            .map_err(|e| e.to_string())?;
+    install_session(&app, &registry, Arc::new(handle))
+}
+
+/// Apply one intent to the active session. Authority rejections are
+/// surfaced both as the command error and as a `kind:"error"` patch on
+/// `session:patch` (§ 3).
+#[tauri::command]
+pub async fn session_intent(
+    intent: Intent,
+    registry: State<'_, Arc<SessionRegistry>>,
+) -> Result<(), String> {
+    let handle = registry.handle().ok_or("no active session")?;
+    if let Err(e) = handle.intent(intent).await {
+        handle.service().broadcast_error(e.to_string());
+        Err(e.to_string())
+    } else {
+        Ok(())
+    }
+}
+
+/// Current snapshot of the active session.
+#[tauri::command]
+pub fn session_snapshot(
+    registry: State<'_, Arc<SessionRegistry>>,
+) -> Result<SessionSnapshot, String> {
+    let handle = registry.handle().ok_or("no active session")?;
+    handle.snapshot_now().map_err(|e| e.to_string())
+}
+
+/// Leave / tear down the active session (persists first).
+#[tauri::command]
+pub async fn session_leave(registry: State<'_, Arc<SessionRegistry>>) -> Result<(), String> {
+    if let Some(active) = registry.take() {
+        let _ = active.service.save_now();
+        let _ = active.service.peer_left(&active.handle.peer_id);
+    }
+    Ok(())
 }
 
 /// The 5 v1 lens packs. Phase 1 returns the manifest; the actual content

@@ -2,7 +2,7 @@
 
 Cross-platform PF2e Remaster + Christian Biblical worldview reference & worldbuilding companion. Tauri 2 + SvelteKit + SQLite (FTS5 + sqlite-vec).
 
-> **Status**: Phase 5 of 9 — all 5 denominational lens packs landed 2026-05-26.
+> **Status**: Phase 10 of 9 — Live Table (real-time multiplayer) + original adventure content landed.
 > Plan: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2e-biblical-reference-2026-05-25.md`.
 
 ## What works
@@ -197,4 +197,54 @@ pnpm tauri ios dev
 
 # Android emulator / device:
 pnpm tauri android dev
+```
+
+## Phase 10 — Live Table
+
+Real-time shared tabletop for PF2e. Desktop hosts via Tauri IPC; mobile clients join via LAN WebSocket (port 4780) or P2P ticket (iroh). One codebase, works unchanged in Tauri Android/iOS shells.
+
+### What it does
+- **Lobby (`/table`)**: Host a new session (pick campaign, adventure, your name/color) or join via P2P ticket or host LAN URL. Shows copyable invite ticket and LAN URL.
+- **Play surface (`/table/play`)**: Six tabs — Chat+Dice (dice parser `/roll 1d20+7 --secret` with per-die breakdown), Initiative tracker (GM reorder/advance), Party (character sheet cards, owner-editable), Scene (square grid canvas, drag tokens you own, GM adds/removes/sets background), Handouts (markdown render, GM reveals), GM drawer (reuses chat component, auto-gets `roll_dice` tool).
+- **Mobile layout**: Reuses existing bottom-tabs nav; compact tabs with icons-only on narrow screens.
+- **Authority**: GM-only intents (reveal handout, set initiative, add/remove token, set scene, load adventure, end session) enforced by backend; players only move their own tokens, edit their own sheets.
+
+### Host / Join (Desktop)
+1. Open `/table` in the Tauri app.
+2. Enter your name, pick a color.
+3. Choose a campaign (create one in `/vault` if needed).
+4. Optionally pick "The Widow's Lamp" adventure.
+5. Click **Host Session**.
+6. Copy the **P2P Ticket** (for desktop peers) or **LAN URL** (for mobile) and share.
+7. Click **Enter Table** to join your own session.
+
+### Join (Mobile / Second Desktop)
+- **P2P (desktop)**: Paste the ticket into the "P2P Ticket" field on `/table`, enter your name, click **Join Session**.
+- **LAN (mobile)**: Open the LAN URL (e.g., `ws://192.168.1.42:4780/abc123`) in the mobile browser or Tauri Android/iOS app. The `?host=` query param is auto-handled.
+
+### Feature flags (Rust, `src-tauri/Cargo.toml`)
+- `lan` (default ON) — WebSocket bridge on port 4780 (`tokio-tungstenite`).
+- `p2p` (default ON) — iroh 1.3 P2P sync (`iroh`, `iroh-tickets`).
+- CI lean path: `cargo check --no-default-features` compiles neither.
+- Offline guard: P2P tests require `PF2E_NET_TESTS=1`.
+
+### Adventure content
+- `src-tauri/data/content/lewisian/adventures/the-widows-lamp/widows-lamp.md` — Level 1–2 scenario, 3 scenes, 2 handouts, 3 NPC statblocks.
+- Statblock sidecars pass `validate_statblock` (sanctification taxonomy, `license_provenance: homebrew`).
+- `sources:` arrays cite Bible refs and the Lewisian wiki; tone aligns with the pack's mere-Christianity posture.
+
+### Tests
+- `pnpm test` — Vitest: `transport.test.ts` (mock transport, WS frame shapes), `session.svelte.test.ts` (reducer: snapshot replace, chat ordering, token merge, handout reveal, session end, unknown-kind tolerance).
+- `cargo test` — Rust: dice parse/roll, session authority matrix, automerge sync convergence, adventure parsing/validation, LAN WS hello→welcome→snapshot + chat broadcast + authority rejection, P2P loopback convergence (guarded by `PF2E_NET_TESTS=1`).
+
+### Architecture additions
+```
+src/
+  lib/
+    ipc.ts          + Phase 10 types (Intent, PatchEvent, SessionSnapshot, SessionInfo, sessionHost/Join/Load/Intent/Leave)
+    transport.ts    + two-backend Transport interface (ipcTransport, wsTransport, mockTransport, createTransport)
+    session.svelte.ts  reactive store (applyPatch reducer, derived state, sendIntent)
+  routes/
+    table/+page.svelte           lobby (host/join/invite)
+    table/play/+page.svelte      play surface (6 tabs, grid, dice, sheets)
 ```

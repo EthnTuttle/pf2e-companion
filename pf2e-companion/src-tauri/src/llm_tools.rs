@@ -13,6 +13,8 @@
 //! The wired tools, in alphabetical order:
 //!   - `lookup_alias(name)` — legacy → Remaster name table
 //!   - `lookup_miracle(query)` — biblical-miracle → spell map
+//!   - `roll_dice(expr, secret?)` — live-table dice (Phase 10;
+//!     session-scoped via `dispatch_tool_session`, GM/host-only)
 //!   - `search(query, lens?)` — hybrid FTS+vector lens content
 //!   - `validate_statblock(statblock)` — sanctification + license checks
 //!   - `xp_budget(party_size, difficulty)` — encounter budget
@@ -35,10 +37,12 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 /// Tool ids — kept as a typed list so the dispatch + spec advertise from
-/// a single source of truth.
+/// a single source of truth. Phase 10 adds the session-scoped
+/// `roll_dice` (GM-only, host-only — see `dispatch_tool_session`).
 pub const TOOL_IDS: &[&str] = &[
     "lookup_alias",
     "lookup_miracle",
+    "roll_dice",
     "search",
     "validate_statblock",
     "xp_budget",
@@ -75,6 +79,21 @@ pub fn tool_specs() -> Vec<ToolSpec> {
                     "query": { "type": "string", "description": "Miracle name, Bible reference, or spell name." }
                 },
                 "required": ["query"]
+            }),
+        },
+        ToolSpec {
+            name: "roll_dice".to_string(),
+            description: "Roll PF2e dice notation (e.g. \"2d6+3\", \"d20\", \"4d6k3\") at the \
+                          live table. Only available while you are hosting a table session as \
+                          the GM; the result is posted to the shared chat/roll log."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "expr": { "type": "string", "description": "Dice expression, e.g. \"2d6+3\"." },
+                    "secret": { "type": "boolean", "description": "GM-only hidden roll (default false)." }
+                },
+                "required": ["expr"]
             }),
         },
         ToolSpec {
@@ -129,6 +148,10 @@ pub fn tool_specs() -> Vec<ToolSpec> {
 /// Execute one tool call, returning the JSON-encoded result string. Any
 /// error is returned as an `Err` whose message will be fed back to the
 /// model as the tool result (so it can recover or report).
+///
+/// `roll_dice` is intentionally NOT handled here — it requires an
+/// active table session and is only reachable through
+/// [`dispatch_tool_session`].
 pub async fn dispatch_tool(
     call: &ToolCall,
     db: &Db,
@@ -262,6 +285,65 @@ pub enum AgentEvent {
     End { usage: UsageSummary, iterations: usize },
 }
 
+/// Session-aware tool dispatch (Phase 10). `roll_dice` requires an
+/// active session handle and applies `Intent::RollDice` as the GM peer
+/// of the hosted session (GM-only, host-only — rejected on processes
+/// without a session handle). Everything else delegates to
+/// [`dispatch_tool`].
+pub async fn dispatch_tool_session(
+    call: &ToolCall,
+    db: &Db,
+    registry: &LlmRegistry,
+    session: Option<&std::sync::Arc<crate::session::SessionHandle>>,
+) -> Result<Value> {
+    if call.name == "roll_dice" {
+        let handle = session
+            .ok_or_else(|| anyhow!("roll_dice requires an active hosted table session"))?;
+        if handle.role != crate::session::Role::Gm {
+            anyhow::bail!("roll_dice is only available to the GM on the session host");
+        }
+        let expr: String = call
+            .input
+            .get("expr")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .ok_or_else(|| anyhow!("roll_dice.expr missing"))?;
+        let secret = call
+            .input
+            .get("secret")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        // Secret rolls store no numbers in the shared doc — the numeric
+        // result is acked here (host session only) via the tracked roll.
+        let (events, roll) = handle
+            .intent_events(crate::session::Intent::RollDice { expr, secret })
+            .await?;
+        if let Some(roll) = roll {
+            return Ok(json!({
+                "expr": roll.expr,
+                "total": roll.total,
+                "rolls": roll.rolls,
+            }));
+        }
+        // Fall back to the derived chat events (defensive; the tracked
+        // roll is always present for RollDice intents).
+        for event in events {
+            if let crate::session::PatchEventPayload::ChatAppended { entry } = event.payload {
+                if let Some(roll) = entry.roll {
+                    return Ok(json!({
+                        "expr": roll.expr,
+                        "total": roll.total,
+                        "rolls": roll.rolls,
+                    }));
+                }
+            }
+        }
+        anyhow::bail!("roll_dice produced no roll record");
+    } else {
+        dispatch_tool(call, db, registry).await
+    }
+}
+
 /// Drive the agent loop. The caller is expected to spawn this on a tokio
 /// task and consume the receiver to forward events to the UI.
 ///
@@ -272,11 +354,37 @@ pub enum AgentEvent {
 pub fn run_agent(
     db: Arc<Db>,
     registry: Arc<LlmRegistry>,
+    messages: Vec<Message>,
+    system: String,
+    cache_system: bool,
+    temperature: Option<f32>,
+    max_tokens: Option<u32>,
+) -> mpsc::UnboundedReceiver<Result<AgentEvent>> {
+    run_agent_with_session(
+        db,
+        registry,
+        messages,
+        system,
+        cache_system,
+        temperature,
+        max_tokens,
+        None,
+    )
+}
+
+/// [`run_agent`] with an optional live-table session handle. When a
+/// GM-hosted session is active, the `roll_dice` tool rolls into the
+/// shared session log; behavior is otherwise identical.
+#[allow(clippy::too_many_arguments)] // mirrors the frozen `run_agent` shape + session
+pub fn run_agent_with_session(
+    db: Arc<Db>,
+    registry: Arc<LlmRegistry>,
     mut messages: Vec<Message>,
     system: String,
     cache_system: bool,
     temperature: Option<f32>,
     max_tokens: Option<u32>,
+    session: Option<Arc<crate::session::SessionHandle>>,
 ) -> mpsc::UnboundedReceiver<Result<AgentEvent>> {
     let (tx, rx) = mpsc::unbounded_channel::<Result<AgentEvent>>();
     let tools = tool_specs();
@@ -375,7 +483,8 @@ pub fn run_agent(
 
             // Execute every tool call and append a Tool message for each.
             for tc in &pending_tool_calls {
-                let (result_value, is_err) = match dispatch_tool(tc, &db, &registry).await {
+                let (result_value, is_err) =
+                    match dispatch_tool_session(tc, &db, &registry, session.as_ref()).await {
                     Ok(v) => (v, false),
                     Err(e) => (json!({ "error": e.to_string() }), true),
                 };

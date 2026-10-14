@@ -1,0 +1,64 @@
+{
+  "name": "Thug",
+  "title": "Debtor-Enforcer",
+  "level": 1,
+  "type": "npc",
+  "lens": "lewisian",
+  "license_provenance": "homebrew",
+  "sanctification": "none",
+  "traits": ["medium", "humanoid", "human"],
+  "perception": 7,
+  "languages": ["Common"],
+  "skills": {
+    "intimidation": 7,
+    "athletics": 7,
+    "crafting": 5
+  },
+  "str": 3,
+  "dex": 1,
+  "con": 2,
+  "int": 0,
+  "wis": 1,
+  "cha": 1,
+  "ac": 16,
+  "fort": 8,
+  "ref": 7,
+  "will": 7,
+  "hp": 25,
+  "speed": "25 ft.",
+  "melee": [
+    {
+      "name": "Sap",
+      "bonus": 7,
+      "damage": "1d6+3 bludgeoning",
+      "traits": ["agile", "nonlethal"]
+    },
+    {
+      "name": "Club",
+      "bonus": 7,
+      "damage": "1d6+3 bludgeoning",
+      "traits": ["shove"]
+    }
+  ],
+  "ranged": [
+    {
+      "name": "Crossbow",
+      "bonus": 6,
+      "damage": "1d8 piercing",
+      "range": "60 ft.",
+      "traits": ["reload 1"]
+    }
+  ],
+  "abilities": [
+    {
+      "name": "Debt Collection",
+      "type": "ability",
+      "action": "1",
+      "description": "The thug attempts to Intimidate a creature within 30 ft. that owes a debt. On a success, the target is frightened 1; on a critical success, frightened 2."
+    }
+  ],
+  "sources": [
+    "original work — github.com/average-gary/pf2e-companion",
+    "wiki:pf2e-biblical-reskin/widows-lamp-scenario § Thug"
+  ]
+}

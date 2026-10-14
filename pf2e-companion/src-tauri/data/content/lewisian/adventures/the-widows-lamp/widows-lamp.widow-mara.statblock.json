@@ -1,0 +1,67 @@
+{
+  "name": "Mara Varel",
+  "title": "The Widow of the Lamp",
+  "level": 1,
+  "type": "npc",
+  "lens": "lewisian",
+  "license_provenance": "homebrew",
+  "traits": ["medium", "human", "humanoid"],
+  "perception": 7,
+  "languages": ["Common", "Sign Language (Oakhaven Dock Ward)"],
+  "skills": {
+    "society": 7,
+    "crafting": 7,
+    "cooking lore": 9,
+    "herbalism lore": 8,
+    "oakhaven dock ward lore": 8
+  },
+  "str": 0,
+  "dex": 1,
+  "con": 1,
+  "int": 1,
+  "wis": 3,
+  "cha": 2,
+  "ac": 15,
+  "fort": 7,
+  "ref": 8,
+  "will": 10,
+  "hp": 18,
+  "speed": "20 ft.",
+  "melee": [
+    {
+      "name": "Walking Cane",
+      "bonus": 5,
+      "damage": "1d4 bludgeoning",
+      "traits": ["propulsive"]
+    }
+  ],
+  "ranged": [],
+  "abilities": [
+    {
+      "name": "Tender of the Light",
+      "type": "ability",
+      "description": "Mara can activate the Widow's Lamp (the relic) as a single action, even without the normal Investiture requirements. While she tends the lamp, its light radius increases by 10 ft. and its counteract modifier increases to +7."
+    },
+    {
+      "name": "Unshakable Vow",
+      "type": "ability",
+      "description": "Mara gains a +2 circumstance bonus to Will saves against fear, emotion, and mental effects while the Widow's Lamp is lit. She cannot be compelled to extinguish or surrender the lamp by any effect short of direct divine intervention."
+    },
+    {
+      "name": "Sanctuary of the Hearth",
+      "type": "reaction",
+      "trigger": "An ally within 15 ft. would take damage.",
+      "frequency": "once per round",
+      "description": "Mara interposes her cane or her body. The ally gains resistance 3 to all damage against that attack. If the attack would reduce the ally to 0 HP, Mara takes the damage instead (up to her remaining HP)."
+    },
+    {
+      "name": "Ledger's Mark",
+      "type": "ability",
+      "description": "Mara bears the mark of the Iron Ledger's claim — a faint, cold brand on her wrist. Fiends and devil-touched creatures can sense this mark at 120 ft. (imprecise). While marked, Mara cannot critically succeed on saves against lawful effects, but she gains a +1 status bonus to saves against chaotic effects."
+    }
+  ],
+  "sources": [
+    "original work — github.com/average-gary/pf2e-companion",
+    "wiki:pf2e-biblical-reskin/widows-lamp-scenario § Widow Mara"
+  ]
+}

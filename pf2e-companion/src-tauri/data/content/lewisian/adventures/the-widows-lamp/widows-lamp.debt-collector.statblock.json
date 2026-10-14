@@ -1,0 +1,94 @@
+{
+  "name": "Vorn's Agent",
+  "title": "Debt Collector of the Iron Ledger",
+  "level": 3,
+  "type": "npc",
+  "lens": "lewisian",
+  "license_provenance": "homebrew",
+  "traits": ["medium", "fiend", "devil", "humanoid", "lawful", "evil"],
+  "perception": 11,
+  "languages": ["Common", "Infernal", "Abyssal", "Dwarven"],
+  "skills": {
+    "intimidation": 13,
+    "deception": 12,
+    "diplomacy": 12,
+    "society": 11,
+    "athletics": 10
+  },
+  "str": 4,
+  "dex": 2,
+  "con": 3,
+  "int": 2,
+  "wis": 2,
+  "cha": 3,
+  "ac": 19,
+  "fort": 11,
+  "ref": 10,
+  "will": 12,
+  "hp": 55,
+  "immunities": ["fire"],
+  "resistances": ["poison 5", "physical 3 (except silver or good)"],
+  "weaknesses": ["good 3", "silver 3"],
+  "speed": "25 ft.",
+  "melee": [
+    {
+      "name": "Iron Quill Rapier",
+      "bonus": 11,
+      "damage": "1d6+4 piercing plus 1d6 evil",
+      "traits": ["finesse", "versatile s"]
+    },
+    {
+      "name": "Chained Ledger",
+      "bonus": 11,
+      "damage": "1d8+4 bludgeoning",
+      "traits": ["reach 10 ft.", "grapple", "trip"]
+    }
+  ],
+  "ranged": [
+    {
+      "name": "Writ of Seizure",
+      "bonus": 10,
+      "damage": "2d6+3 mental",
+      "range": "30 ft.",
+      "traits": ["mental", "lawful"]
+    }
+  ],
+  "spell_dc": 19,
+  "spell_attack": 11,
+  "spells": {
+    "2": ["bind undead", "silence"],
+    "1": ["charm", "command", "detect magic"]
+  },
+  "abilities": [
+    {
+      "name": "Legalistic Bind",
+      "type": "reaction",
+      "trigger": "A creature within 30 ft. damages the debt collector or an ally the debt collector is protecting, or attempts to seize an item the debt collector claims.",
+      "description": "The target must succeed at a DC 19 Will save or be paralyzed for 1 round as infernal chains of contract law wrap around them. On a critical failure, the target is also stunned 1. A creature that succeeds is temporarily immune for 24 hours."
+    },
+    {
+      "name": "Infernal Warrant",
+      "type": "ability",
+      "action": "1",
+      "frequency": "once per day",
+      "description": "The debt collector presents a writ. One target within 30 ft. must succeed at a DC 19 Will save or be dominated (as dominate, level 3) for 1 minute. The command is always 'Surrender the asset.'"
+    },
+    {
+      "name": "Contractual Evasion",
+      "type": "reaction",
+      "trigger": "The debt collector would take damage from a spell or ability.",
+      "description": "The debt collector attempts a Deception check against the effect's DC. On a success, they take half damage; on a critical success, no damage and the effect's originator takes 1d6 mental damage as the contract rebounds."
+    },
+    {
+      "name": "Seize Asset",
+      "type": "ability",
+      "action": "2",
+      "requirements": "The debt collector has an opponent grabbed or restrained.",
+      "description": "The debt collector attempts to Disarm the target of a specific item (the 'asset'). On a success, the item teleports to the debt collector's hand. This is a teleportation effect."
+    }
+  ],
+  "sources": [
+    "original work — github.com/average-gary/pf2e-companion",
+    "wiki:pf2e-biblical-reskin/widows-lamp-scenario § Debt Collector"
+  ]
+}

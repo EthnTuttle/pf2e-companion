@@ -16,6 +16,7 @@
     { href: "/vault", icon: "📜", label: "Vault" },
     { href: "/aliases", icon: "🔄", label: "Aliases" },
     { href: "/miracles", icon: "📖", label: "Miracles" },
+    { href: "/table", icon: "🎲", label: "Table" },
   ];
 </script>
 

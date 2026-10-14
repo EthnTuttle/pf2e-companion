@@ -337,3 +337,118 @@ export interface SuiteSummary {
 export const evalLoadSuite = () => invoke<EvalPrompt[]>("eval_load_suite");
 
 export const evalRun = () => invoke<SuiteSummary>("eval_run");
+
+// === Phase 10 — Live Table ===============================================
+
+export type Role = "gm" | "player";
+
+export type Intent =
+  | { kind: "create_character"; name: string; color: string; character: CharacterSheet }
+  | { kind: "update_sheet"; patch: Partial<CharacterSheet> }
+  | { kind: "roll_dice"; expr: string; secret?: boolean }
+  | { kind: "chat"; text: string }
+  | { kind: "reveal_handout"; handout_id: string }
+  | { kind: "set_initiative"; order: string[] }
+  | { kind: "advance_initiative" }
+  | { kind: "move_token"; token_id: string; x: number; y: number }
+  | { kind: "add_token"; token: Token }
+  | { kind: "remove_token"; token_id: string }
+  | { kind: "set_scene"; grid: Grid; background_entity_id: string | null }
+  | { kind: "load_adventure"; slug: string }
+  | { kind: "end_session" };
+
+export interface CharacterSheet {
+  level: number;
+  class: string;
+  hp: number;
+  max_hp: number;
+  ac: number;
+  conditions: string[];
+  notes: string;
+}
+
+export interface Grid {
+  w: number;
+  h: number;
+  size: number;
+}
+
+export interface Token {
+  token_id: string;
+  owner: string;
+  entity_id: string | null;
+  pc: string | null;
+  x: number;
+  y: number;
+  label: string;
+}
+
+export interface RollRecord {
+  expr: string;
+  total: number;
+  rolls: number[];
+  kept: number[];
+}
+
+export interface ChatEntry {
+  ts: number;
+  from: string;
+  kind: "chat" | "roll" | "system";
+  text: string;
+  roll: RollRecord | null;
+}
+
+export interface SessionInfo {
+  session_id: string;
+  peer_id: string;
+  role: Role;
+  lan_url: string | null;
+  p2p_ticket: string | null;
+  name: string;
+}
+
+export interface SessionSnapshot {
+  meta: {
+    id: string;
+    name: string;
+    gm_id: string;
+    created_at: number;
+    adventure_slug: string | null;
+  };
+  players: Record<string, { name: string; character: CharacterSheet | null; color: string; connected: boolean }>;
+  chat: ChatEntry[];
+  init: { order: string[]; active_idx: number; round: number };
+  scene: { grid: Grid; background_entity_id: string | null; tokens: Record<string, Token> };
+  handouts: Record<string, { entity_id: string; visible_to: "all" | "gm" }>;
+}
+
+export type PatchEvent =
+  | { session_id: string; kind: "snapshot"; snapshot: SessionSnapshot }
+  | { session_id: string; kind: "chat_appended"; entry: ChatEntry }
+  | { session_id: string; kind: "player_upserted"; peer_id: string; player: { name: string; character: CharacterSheet | null; color: string; connected: boolean } }
+  | { session_id: string; kind: "player_removed"; peer_id: string }
+  | { session_id: string; kind: "initiative"; order: string[]; active_idx: number; round: number }
+  | { session_id: string; kind: "token_upserted"; token: Token }
+  | { session_id: string; kind: "token_removed"; token_id: string }
+  | { session_id: string; kind: "scene_set"; scene: SessionSnapshot["scene"] }
+  | { session_id: string; kind: "handout_revealed"; handout_id: string }
+  | { session_id: string; kind: "adventure_loaded"; slug: string }
+  | { session_id: string; kind: "session_ended" }
+  | { session_id: string; kind: "error"; message: string };
+
+export type PresenceEvent =
+  | { session_id: string; kind: "peer_joined"; peer_id: string; name: string; via: "ipc" | "lan" | "p2p" }
+  | { session_id: string; kind: "peer_left"; peer_id: string };
+
+export const sessionHost = (campaignId: string, name: string, adventureSlug: string | null = null) =>
+  invoke<SessionInfo>("session_host", { campaignId, name, adventureSlug });
+
+export const sessionJoinPeer = (ticket: string, name: string) =>
+  invoke<SessionInfo>("session_join_peer", { ticket, name });
+
+export const sessionLoad = (campaignId: string, sessionId: string) =>
+  invoke<SessionInfo>("session_load", { campaignId, sessionId });
+
+export const sessionIntent = (intent: Intent) => invoke<void>("session_intent", { intent });
+
+export const sessionLeave = () => invoke<void>("session_leave");

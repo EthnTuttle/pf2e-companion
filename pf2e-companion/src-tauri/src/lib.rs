@@ -10,16 +10,23 @@
 //! Each subsequent phase fills in the rest of the spec at
 //! `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2e-biblical-reference-2026-05-25.md`.
 
+pub mod adventure;
 mod commands;
-mod content;
+pub mod content;
 pub mod db;
+pub mod dice;
 pub mod eval;
 mod foundry;
 mod keystore;
 pub mod llm;
 pub mod llm_tools;
+#[cfg(feature = "lan")]
+pub mod lan;
+#[cfg(feature = "p2p")]
+pub mod net;
 pub mod rag;
-mod rules;
+pub mod rules;
+pub mod session;
 mod vault;
 mod vault_write;
 
@@ -60,6 +67,9 @@ pub fn run() {
             // opt-in.
             app.manage(Arc::new(llm::LlmRegistry::new()));
 
+            // Phase 10 — Live Table. One active session per process.
+            app.manage(Arc::new(session::SessionRegistry::new()));
+
             let vault_root = app_data.join("vault");
             std::fs::create_dir_all(&vault_root).ok();
             app.manage(Arc::new(vault_write::VaultRoot(vault_root.clone())));
@@ -98,6 +108,12 @@ pub fn run() {
             commands::rag_reindex,
             commands::eval_load_suite,
             commands::eval_run,
+            commands::session_host,
+            commands::session_join_peer,
+            commands::session_intent,
+            commands::session_snapshot,
+            commands::session_leave,
+            commands::session_load,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
