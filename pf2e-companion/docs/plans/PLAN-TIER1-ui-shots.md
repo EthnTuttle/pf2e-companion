@@ -193,8 +193,8 @@ Also export `SNAPSHOT` — a full `SessionSnapshot` (GM + 2 players with
 character sheets, 6 chat entries incl. one roll with `kept`, initiative
 order with active idx, 12×8 scene grid with 3 tokens, 1 revealed + 1 GM-only
 handout) for `/table/play` via `__e2eEmit("session:patch", { session_id:
-"e2e-session", kind: "snapshot", snapshot })` (accepted by `applyPatch`:
-`session.svelte.ts:16-40` only drops patches when `info` is set AND ids
+"e2e-session", kind: "snapshot", snapshot })` — accepted by `applyPatch`
+(`session.svelte.ts:16-40` drops patches only when `info` is set AND ids
 mismatch).
 
 Effort: ~2.5 h.
@@ -243,7 +243,7 @@ Row 17's fresh context keeps `localStorage` empty → lens starts at
 "Restarting…" card via a `restart_required: true` micro-variant) is an
 optional stretch — not counted in the 80.
 
-Effort: ~2.5 h (was 1.5; wizard flow + chat replay).
+Effort: ~2.5 h (wizard flow + chat replay).
 
 ### Step 5 — `e2e/shots.ts` (new, ~180 lines) — the runner
 
@@ -294,15 +294,14 @@ Checklist: text overflow/clipping; empty states; all 6 tabbar tabs +
 About/Chat/Settings pills reachable at 390px (no horizontal scroll, nothing
 under the fixed tabbar); dark-mode contrast (`color-mix` tokens); broken
 images/emoji icons; form alignment; GM-only elements hidden for the player
-variant; wizard invariants ("Step N of 3 · …" matches the visible fieldset,
-radios focusable, Back/Next reachable on mobile); chat-reply variant (tool
-traces, no orphaned empty assistant bubble). Plus a **copy-paste
-reviewer-subagent prompt template**: "You are a UI reviewer for
-pf2e-companion. Run `pnpm e2e:shots`, read `shots/manifest.json`, Read every
-PNG listed, evaluate each against the checklist in
-docs/ui-reviews/README.md, then write one finding file per route with defects
-ranked by severity. Do not modify app code." The doc states honestly what the
-shots do NOT prove (see §4).
+variant; wizard invariants ("Step N of 3 · …" matches the fieldset, radios
+focusable, Back/Next reachable on mobile); chat-reply variant (tool traces,
+no orphaned empty assistant bubble). Plus a **copy-paste reviewer-subagent
+prompt template**: "You are a UI reviewer for pf2e-companion. Run
+`pnpm e2e:shots`, read `shots/manifest.json`, Read every PNG listed, evaluate
+each against the checklist in docs/ui-reviews/README.md, then write one
+finding file per route with defects ranked by severity. Do not modify app
+code." The doc states honestly what the shots do NOT prove (see §4).
 
 Effort: ~1 h.
 
@@ -410,24 +409,24 @@ Effort: ~10 min.
 
 1. `pnpm e2e:shots` (one-time `playwright install chromium` on fresh
    machines; already cached here) builds, serves the static build on :4173,
-   and exits 0 headlessly with **zero page/console errors**.
+   and exits 0 headlessly with **zero page/console errors**; two consecutive
+   runs are byte-identical (spot-gate).
 2. `shots/` contains 80 PNGs matching the §2 matrix (20 rows × 2 viewports ×
    2 themes) plus `manifest.json` fully enumerating them (route, variant,
    viewport, theme, file, notes); `shots/` is gitignored.
-3. Two consecutive runs are byte-identical (spot-gate).
-4. `/table/play` renders GM and player variants from the fixture snapshot
+3. `/table/play` renders GM and player variants from the fixture snapshot
    through the real `listen` → `applyPatch` path; GM-only tabs visible only
    in the GM variant.
-5. `/onboarding` renders all 3 stepper screens (Vault / Lens / LLM),
+4. `/onboarding` renders all 3 stepper screens (Vault / Lens / LLM),
    advanced by real Next-button clicks, in the `wizardFresh` variant — and
    NO other route redirects to `/onboarding` (`needed: false` + the startup
    assertion prove it).
-6. The `/chat` scripted-reply variant shows an assistant message with tool
+5. The `/chat` scripted-reply variant shows an assistant message with tool
    traces assembled from `llm:token` events delivered through the page's real
    `subscribeToSession` listener; labeled `stubbed-backend`.
-7. An agent following `docs/ui-reviews/README.md` goes from zero to a
+6. An agent following `docs/ui-reviews/README.md` goes from zero to a
    written per-route findings file without globbing or app knowledge.
-8. All pre-existing gates stay green: `pnpm test`, `pnpm check` (0/0 —
+7. All pre-existing gates stay green: `pnpm test`, `pnpm check` (0/0 —
    covering `e2e/**` per the binding decision), `pnpm build`, `cargo test`
    (default + `--all-features`). Only `pnpm-lock.yaml` changes among
    lockfiles.

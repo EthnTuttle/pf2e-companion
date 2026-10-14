@@ -9,11 +9,32 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "moduleResolution": "bundler"
-  }
+    "moduleResolution": "bundler",
+    // Node's type-stripping runtime needs explicit .ts import extensions in
+    // e2e/ (no bundler); noEmit (inherited) makes them legal here too.
+    "allowImportingTsExtensions": true
+  },
+  // Full copy of the generated include list (TS does not merge includes — a
+  // partial copy would silently uncheck src/), rebased to this file's
+  // directory, plus the e2e/ harness so `pnpm check` covers it.
+  "include": [
+    ".svelte-kit/ambient.d.ts",
+    ".svelte-kit/non-ambient.d.ts",
+    ".svelte-kit/types/**/$types.d.ts",
+    "vite.config.js",
+    "vite.config.ts",
+    "src/**/*.js",
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "test/**/*.js",
+    "test/**/*.ts",
+    "test/**/*.svelte",
+    "tests/**/*.js",
+    "tests/**/*.ts",
+    "tests/**/*.svelte",
+    "e2e/**/*.ts",
+    "e2e/**/*.js"
+  ]
   // Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
   // except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
-  //
-  // If you want to overwrite includes/excludes, make sure to copy over the relevant includes/excludes
-  // from the referenced tsconfig.json - TypeScript does not merge them in
 }
