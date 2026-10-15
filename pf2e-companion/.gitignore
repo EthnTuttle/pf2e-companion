@@ -8,3 +8,13 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Phase 12 E2E harness (Playwright)
+test-results/
+playwright-report/
+tests/e2e/screenshots/
+
+# Lore-imagery pipeline (tools/imagery): raws regenerable via client_request_id
+tools/imagery/staging/
+tools/imagery/.venv/
+tools/imagery/review.html

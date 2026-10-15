@@ -188,3 +188,51 @@ jobs:
       - name: pnpm tauri android build · debug
         working-directory: pf2e-companion
         run: pnpm tauri android build --debug --apk
+
+  # Phase 12 E2E harness (docs/phase12/PLAN.md §5). Deterministic lane:
+  # harness-mode Vite build + headless Chromium on loopback. No `needs:`
+  # (no Rust dependency), runs in parallel with `test`.
+  e2e:
+    name: e2e (playwright · chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pf2e-companion/pnpm-lock.yaml
+
+      - name: pnpm install
+        working-directory: pf2e-companion
+        run: pnpm install --frozen-lockfile
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pf2e-companion/pnpm-lock.yaml') }}
+
+      - name: install chromium
+        working-directory: pf2e-companion
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: pnpm e2e
+        working-directory: pf2e-companion
+        run: pnpm e2e
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: pf2e-companion/tests/e2e/screenshots/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-report
+          path: pf2e-companion/playwright-report/
+          if-no-files-found: ignore

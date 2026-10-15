@@ -1,12 +1,33 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
+// @ts-expect-error @types/node is not resolvable here (pnpm strict store);
+// harness mode is only ever set by the POSIX e2e job / local dev shells.
+import { fileURLToPath } from "node:url";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async ({ mode }) => ({
   plugins: [sveltekit()],
+
+  // Phase 12 E2E harness (docs/phase12/PLAN.md §3.1): in `--mode harness`
+  // only, the app's two — and only two — Tauri API touchpoints are aliased
+  // to in-repo mocks wired to window.__PF2E_HARNESS_CONFIG__/.__pf2eHarness.
+  // Production builds (dev/build/tauri) never pass this mode.
+  resolve:
+    mode === "harness"
+      ? {
+          alias: {
+            "@tauri-apps/api/core": fileURLToPath(
+              new URL("./tests/e2e/harness/tauri-core.ts", import.meta.url),
+            ),
+            "@tauri-apps/api/event": fileURLToPath(
+              new URL("./tests/e2e/harness/tauri-event.ts", import.meta.url),
+            ),
+          },
+        }
+      : undefined,
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
