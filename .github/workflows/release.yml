@@ -1,0 +1,108 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  CARGO_TERM_COLOR: always
+  PNPM_VERSION: 11
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    name: bundle · ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            bundles: "deb,appimage"
+            assets: |
+              pf2e-companion/src-tauri/target/release/bundle/deb/*.deb
+              pf2e-companion/src-tauri/target/release/bundle/appimage/*.AppImage
+          - os: windows-latest
+            bundles: "msi"
+            assets: |
+              pf2e-companion/src-tauri/target/release/bundle/msi/*.msi
+          - os: macos-latest
+            bundles: "dmg"
+            assets: |
+              pf2e-companion/src-tauri/target/release/bundle/dmg/*.dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux GTK + WebKit deps
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            javascriptcoregtk-4.1
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pf2e-companion/pnpm-lock.yaml
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pf2e-companion/src-tauri -> target
+          key: release-${{ matrix.os }}
+
+      - name: pnpm install
+        working-directory: pf2e-companion
+        run: pnpm install --frozen-lockfile
+
+      # Bundled (unsigned) installer build. --bundles scopes each leg to its
+      # own formats so e.g. the Windows runner doesn't fetch NSIS and macOS
+      # skips rpm/AppImage tooling. tauri.conf.json bundle config untouched.
+      - name: pnpm tauri build (bundled, unsigned)
+        working-directory: pf2e-companion
+        run: pnpm tauri build --bundles ${{ matrix.bundles }}
+
+      # Internal handoff to the publish job (workflow artifacts), NOT the
+      # user-facing distribution channel.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.os }}
+          path: ${{ matrix.assets }}
+          if-no-files-found: error
+
+  publish:
+    name: publish · GitHub Release
+    needs: bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundles-*
+          merge-multiple: true
+          path: dist
+
+      # Release assets = the distribution channel. Reasoning: friends-beta
+      # testers are non-technical — release assets download from the Releases
+      # page without a GitHub login and never expire; workflow artifacts
+      # require a logged-in session and age out. One publish job (not one
+      # per matrix leg) avoids the concurrent-release-creation race and puts
+      # every platform's installer on a single release.
+      - name: Attach bundles to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
+          fail_on_unmatched_files: true
+          body: |
+            Unsigned friends-beta build — see the README "Install" section for
+            first-launch steps (Gatekeeper / SmartScreen / deb / AppImage).
