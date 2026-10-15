@@ -12,6 +12,7 @@
   } from "$lib/ipc";
   import { campaignState, refreshCampaigns } from "$lib/campaign.svelte";
   import { lensState } from "$lib/lens.svelte";
+  import { buildInviteUri, inviteFromLobbyQuery } from "$lib/deeplink";
   import { createTransport } from "$lib/transport";
   import { sessionState, resetSession, applyPatch, applyPresence } from "$lib/session.svelte";
   import { describeSavedSession, exportSessionLogViaDialog } from "$lib/savedSessions.svelte";
@@ -54,6 +55,14 @@
     navigator.clipboard.writeText(text);
     error = `Copied ${label} to clipboard`;
     setTimeout(() => (error = null), 2000);
+  }
+
+  // Tier 1 item 2 — one-tap invite: `pf2e://join?url=…&pin=…` opens the app
+  // with the join form prefilled, replacing read-aloud host:port + PIN.
+  function copyInviteLink() {
+    if (!myLanUrl) return;
+    const uri = buildInviteUri({ mode: "lan", lanUrl: myLanUrl, ticket: null, pin: sessionPin });
+    if (uri) copyToClipboard(uri, "invite link");
   }
 
   async function handleHost(e: Event) {
@@ -171,6 +180,19 @@
   }
 
   onMount(async () => {
+    // Invite deep-link prefill (Tier 1 item 2): the layout navigates to
+    // `/table?join=1&url=…&pin=…` (or `&ticket=…`) — prefill the join form
+    // here, then scrub the params from history state so a PIN never
+    // lingers in the app's navigation history. Join is still manual;
+    // nothing auto-connects.
+    const invite = inviteFromLobbyQuery(page.url.searchParams);
+    if (invite) {
+      joinMode = invite.mode;
+      if (invite.lanUrl) lanHost = invite.lanUrl;
+      if (invite.ticket) joinTicket = invite.ticket;
+      if (invite.pin) lanPin = invite.pin;
+      goto("/table", { replaceState: true });
+    }
     const stored = localStorage.getItem("pf2e.playerName");
     if (stored) playerName = stored;
     const storedColor = localStorage.getItem("pf2e.playerColor");
@@ -274,6 +296,16 @@
         <div class="copy-row">
           <code>{sessionPin}</code>
           <button type="button" onclick={() => copyToClipboard(sessionPin, "Table PIN")}>Copy</button>
+        </div>
+      </label>
+    </div>
+    {/if}
+    {#if myLanUrl}
+    <div class="invite-row">
+      <label>
+        <span>Invite link (text it — opens the app with the join form prefilled){sessionPin ? "; carries the PIN" : ""}</span>
+        <div class="copy-row">
+          <button type="button" onclick={copyInviteLink}>Copy invite link</button>
         </div>
       </label>
     </div>

@@ -18,6 +18,10 @@ tauri = { version = "2", features = [] }
 # tauri-plugin-dialog is platform-scoped below ([76] review fix):
 # global default-features=false would strip native macOS/Windows dialog backends.
 tauri-plugin-opener = "2"
+# SHIPPING Tier 1 item 2 — `pf2e://join?…` invite deep-links. Scheme
+# registration comes from tauri.conf.json `plugins.deep-link`; requires
+# Rust >= 1.90 (repo toolchain is newer).
+tauri-plugin-deep-link = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

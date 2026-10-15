@@ -31,5 +31,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["pf2e"]
+      },
+      "mobile": [
+        {
+          "scheme": ["pf2e"],
+          "appLink": false
+        }
+      ]
+    }
   }
 }

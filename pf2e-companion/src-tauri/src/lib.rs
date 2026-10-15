@@ -52,7 +52,20 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
+            // Deep-links (Tier 1 item 2): installed bundles register the
+            // `pf2e` scheme from tauri.conf.json, but Linux AppImages and
+            // `tauri dev`/`cargo run` builds skip that install step — so
+            // re-register at runtime there (plugin docs' recommended scope).
+            // Never fatal: scheme registration must not gate app boot.
+            #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(e) = app.deep_link().register_all() {
+                    tracing::warn!(error = %e, "deep-link runtime registration failed");
+                }
+            }
             // App-data directory (per-platform; resolves correctly on iOS/Android too).
             let app_data = app
                 .path()
