@@ -154,6 +154,9 @@
     max-width: 760px;
     margin: 0 auto;
     padding: 1rem 1rem 5rem;
+    /* 12.3-found fix: content-box width:100% + inline padding made the
+       border-box viewport+32 wide (<792px), clipping content on phones. */
+    box-sizing: border-box;
   }
 
   .tabbar {

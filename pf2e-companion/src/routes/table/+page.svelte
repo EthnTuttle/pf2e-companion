@@ -120,13 +120,18 @@
     }
   }
 
+  // Pre-fill happens synchronously BEFORE the first await; the persist
+  // effect below is gated on prefsLoaded so its initial run can't clobber
+  // stored prefs with blank defaults (12.2-found race).
+  let prefsLoaded = false;
+
   onMount(async () => {
-    await refreshCampaigns();
-    // Pre-fill player name from any stored preference
     const stored = localStorage.getItem("pf2e.playerName");
     if (stored) playerName = stored;
     const storedColor = localStorage.getItem("pf2e.playerColor");
     if (storedColor) playerColor = storedColor;
+    prefsLoaded = true;
+    await refreshCampaigns();
   });
 
   function savePlayerPrefs() {
@@ -135,7 +140,7 @@
   }
 
   $effect(() => {
-    savePlayerPrefs();
+    if (prefsLoaded) savePlayerPrefs();
   });
 </script>
 
