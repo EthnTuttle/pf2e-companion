@@ -426,6 +426,8 @@ export interface SessionSnapshot {
     gm_id: string;
     created_at: number;
     adventure_slug: string | null;
+    /** Additive (v1.1): absent = not ended (legacy payloads). */
+    ended?: boolean;
   };
   players: Record<string, { name: string; character: CharacterSheet | null; color: string; connected: boolean }>;
   chat: ChatEntry[];
@@ -464,9 +466,74 @@ export const sessionHost = (campaignId: string, name: string, adventureSlug: str
 export const sessionJoinPeer = (ticket: string, name: string) =>
   invoke<SessionInfo>("session_join_peer", { ticket, name });
 
-export const sessionLoad = (campaignId: string, sessionId: string) =>
-  invoke<SessionInfo>("session_load", { campaignId, sessionId });
+export const sessionLoad = (campaignId: string, sessionId: string, name?: string) =>
+  invoke<SessionInfo>("session_load", { campaignId, sessionId, name });
 
 export const sessionIntent = (intent: Intent) => invoke<void>("session_intent", { intent });
 
 export const sessionLeave = () => invoke<void>("session_leave");
+
+// === Session log export (SHIPPING Tier 1 item 5) ========================
+
+export interface SavedSessionSummary {
+  session_id: string;
+  campaign: string;
+  name: string;
+  created_at: number;
+  adventure_slug: string | null;
+  ended: boolean;
+  saved_at: number;
+}
+
+/** Every saved session across all campaigns (lobby list). */
+export const sessionListSaved = () => invoke<SavedSessionSummary[]>("session_list_saved");
+
+/**
+ * Export a session's markdown log. `destPath` null/omitted → vault default
+ * (`<vault>/campaigns/<id>/sessions/<session-id>.log.md`). Returns the
+ * written path.
+ */
+export const sessionExportLog = (sessionId: string, destPath: string | null = null) =>
+  invoke<string>("session_export_log", { sessionId, destPath });
+
+// === Diagnostics (SHIPPING Tier 1 item 4) ================================
+
+export interface DiagnosticsInfo {
+  app_version: string;
+  os: string;
+  arch: string;
+  session_id: string | null;
+  lines: string[];
+}
+
+/**
+ * Paste-ready diagnostics blob (version, OS, arch, active session, last
+ * ≤2,000 log lines). No telemetry — it only leaves the machine when the
+ * user pastes it.
+ */
+export const diagnosticsGet = () => invoke<DiagnosticsInfo>("diagnostics_get");
+
+// === First-run wizard (SHIPPING Tier 1 item 6) ==========================
+
+export interface WizardStatus {
+  needed: boolean;
+  /** Default vault location, shown on the wizard's first screen. */
+  default_vault: string;
+}
+
+export interface WizardCompleteResult {
+  restart_required: boolean;
+}
+
+export const wizardStatus = () => invoke<WizardStatus>("wizard_status");
+
+/** Validate a candidate vault folder; resolves to the normalized path. */
+export const wizardValidateVault = (path: string) =>
+  invoke<string>("wizard_validate_vault", { path });
+
+/** Persist the wizard outcome. `vaultPath` null = keep the default vault. */
+export const wizardComplete = (vaultPath: string | null) =>
+  invoke<WizardCompleteResult>("wizard_complete", { vaultPath });
+
+/** Fire-and-forget — the process exits before this resolves. */
+export const appRestart = () => invoke<void>("app_restart");

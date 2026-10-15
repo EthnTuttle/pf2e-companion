@@ -13,6 +13,7 @@ use crate::rules::{self, Difficulty};
 use crate::session::{
     self, Intent, Role, SessionInfo, SessionRegistry, SessionSnapshot, SessionHandle,
 };
+use crate::settings::{self, AppSettings};
 use crate::vault_write::{
     self, Campaign, CrudResult, EntityInput, EntityPatch, RelationRow, VaultRoot,
 };
@@ -21,9 +22,9 @@ use rusqlite::params;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::Emitter;
-use uuid::Uuid;
+use tauri::{Emitter, Manager};
 use tauri::State;
+use uuid::Uuid;
 
 /// Hybrid search. Delegates to `rag::hybrid_search` which fuses FTS5 and
 /// vector retrieval via reciprocal-rank fusion when the LLM provider is
@@ -873,6 +874,141 @@ pub async fn session_leave(registry: State<'_, Arc<SessionRegistry>>) -> Result<
 #[tauri::command]
 pub fn get_entity_image(path: String) -> Result<String, String> {
     crate::images::entity_image_data_url(&path).map_err(|e| e.to_string())
+}
+
+/// Every saved session across all campaigns (lobby list). Corrupt saves
+/// are skipped, never fail the listing.
+#[tauri::command]
+pub fn session_list_saved(
+    vault: State<'_, Arc<VaultRoot>>,
+) -> Result<Vec<session::SavedSessionSummary>, String> {
+    session::export::list_saved(&vault.0).map_err(|e| e.to_string())
+}
+
+/// Export a session log (markdown transcript). `dest_path: None` writes
+/// to the vault-default location next to the canonical `.automerge`.
+/// Flushes a live session first so ≤2 s of debounced chat makes it in.
+#[tauri::command]
+pub async fn session_export_log(
+    session_id: String,
+    dest_path: Option<String>,
+    vault: State<'_, Arc<VaultRoot>>,
+    registry: State<'_, Arc<SessionRegistry>>,
+) -> Result<String, String> {
+    if let Some(active) = registry.get() {
+        if active.service.session_id() == session_id {
+            active.service.save_now().map_err(|e| e.to_string())?;
+        }
+    }
+    let dest = dest_path.map(PathBuf::from);
+    let path = session::export::export_log(&vault.0, &session_id, dest.as_deref())
+        .map_err(|e| e.to_string())?;
+    Ok(path.display().to_string())
+}
+
+/// Paste-ready diagnostics blob (version, OS, arch, active session, last
+/// ≤2,000 log lines) for the Settings "Copy diagnostics" button. No
+/// telemetry — the blob only leaves the machine when the user pastes it.
+#[tauri::command]
+pub fn diagnostics_get(
+    registry: State<'_, Arc<SessionRegistry>>,
+) -> Result<crate::diagnostics::DiagnosticsInfo, String> {
+    let active = registry.get().map(|s| s.handle.session_id.clone());
+    Ok(crate::diagnostics::hub().blob(active.as_deref()))
+}
+
+// === First-run wizard (SHIPPING Tier 1 item 6) ==========================
+
+#[derive(Serialize, Debug)]
+pub struct WizardStatus {
+    pub needed: bool,
+    /// Default vault location, shown on screen 1.
+    pub default_vault: String,
+}
+
+#[derive(Serialize, Debug)]
+pub struct WizardCompleteResult {
+    /// True iff the chosen vault differs from the one this process is
+    /// running — the UI then restarts the app instead of navigating.
+    pub restart_required: bool,
+}
+
+#[tauri::command]
+pub fn wizard_status(
+    app: tauri::AppHandle,
+    vault: State<'_, Arc<VaultRoot>>,
+) -> Result<WizardStatus, String> {
+    // Read fresh from disk (not the startup snapshot): after the wizard
+    // completes without a restart, a webview reload must not re-redirect.
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app data dir resolvable: {e}"))?;
+    let settings = settings::load(&app_data);
+    Ok(WizardStatus {
+        needed: !settings.wizard_completed,
+        default_vault: vault.0.display().to_string(),
+    })
+}
+
+/// Validate a candidate vault folder; returns the normalized (canonical)
+/// path for immediate UI feedback.
+#[tauri::command]
+pub fn wizard_validate_vault(path: String) -> Result<String, String> {
+    settings::validate_vault_path(&path)
+        .map(|p| p.display().to_string())
+}
+
+/// Persist the wizard outcome. `vault_path` None = keep the default vault.
+#[tauri::command]
+pub fn wizard_complete(
+    vault_path: Option<String>,
+    app: tauri::AppHandle,
+    settings: State<'_, Arc<AppSettings>>,
+    vault: State<'_, Arc<VaultRoot>>,
+) -> Result<WizardCompleteResult, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app data dir resolvable: {e}"))?;
+
+    let normalized = match &vault_path {
+        Some(raw) => Some(settings::validate_vault_path(raw)?),
+        None => None,
+    };
+
+    // Compare canonicalized paths — a re-pick of the folder we're already
+    // running must not report a restart.
+    let running = vault
+        .0
+        .canonicalize()
+        .unwrap_or_else(|_| vault.0.clone());
+    let restart_required = match &normalized {
+        Some(p) => *p != running,
+        None => false,
+    };
+
+    let mut updated = AppSettings {
+        vault_path: normalized,
+        wizard_completed: true,
+        // Keep the root this launch ran under: if the vault changed, the
+        // next launch detects the delta and clears the derived index once.
+        last_run_vault: settings.last_run_vault.clone(),
+    };
+    if !restart_required {
+        // Same folder — pin the new spelling so the next boot doesn't see a
+        // phantom change.
+        updated.last_run_vault = Some(running);
+    }
+    settings::save(&app_data, &updated).map_err(|e| e.to_string())?;
+    Ok(WizardCompleteResult { restart_required })
+}
+
+/// Named generically — future settings changes that need a relaunch reuse
+/// this. Never returns on success (the process exits).
+#[tauri::command]
+pub fn app_restart(app: tauri::AppHandle) -> Result<(), String> {
+    app.restart()
 }
 
 /// The 5 v1 lens packs. Phase 1 returns the manifest; the actual content

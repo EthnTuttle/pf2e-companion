@@ -124,6 +124,7 @@ async fn main() {
         gm_id: GM_PEER.to_string(),
         created_at: 1_700_000_000_000,
         adventure_slug: None,
+        ended: false,
     };
     let svc = SessionService::new(
         SharedDoc::new(SessionDoc::new_session(meta)),

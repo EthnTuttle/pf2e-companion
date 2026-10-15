@@ -1,13 +1,29 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
+  import { goto } from "$app/navigation";
   import { ensureLensesLoaded, lensState } from "$lib/lens.svelte";
   import { campaignState, refreshCampaigns } from "$lib/campaign.svelte";
+  import { shouldRedirectToWizard, fetchWizardNeeded } from "$lib/wizard.svelte";
 
   let { children } = $props();
 
+  // Persist topbar lens-picker changes (pf2e.lens).
+  $effect(() => {
+    try {
+      localStorage.setItem("pf2e.lens", lensState.active);
+    } catch {
+      // Storage unavailable — in-memory only.
+    }
+  });
+
   onMount(async () => {
     await Promise.all([ensureLensesLoaded(), refreshCampaigns()]);
+    // First-run wizard: runs once per app load. fetchWizardNeeded swallows
+    // IPC failure (browser/LAN clients) — they stay on `/`.
+    if (shouldRedirectToWizard(page.url.pathname, await fetchWizardNeeded())) {
+      goto("/onboarding");
+    }
   });
 
   const tabs = [
@@ -26,6 +42,7 @@
     <div class="pickers">
       <a class="about-link" href="/about" title="About this app">About</a>
       <a class="about-link" href="/chat" title="Chat (optional LLM)">Chat</a>
+      <a class="about-link" href="/settings" title="Settings and diagnostics">Settings</a>
       <label class="picker">
         <span>Campaign</span>
         <select

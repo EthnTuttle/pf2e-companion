@@ -2,11 +2,19 @@
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { sessionHost, sessionJoinPeer, sessionLoad, type SessionInfo } from "$lib/ipc";
+  import {
+    sessionHost,
+    sessionJoinPeer,
+    sessionLoad,
+    sessionListSaved,
+    type SavedSessionSummary,
+    type SessionInfo,
+  } from "$lib/ipc";
   import { campaignState, refreshCampaigns } from "$lib/campaign.svelte";
   import { lensState } from "$lib/lens.svelte";
   import { createTransport } from "$lib/transport";
   import { sessionState, resetSession, applyPatch, applyPresence } from "$lib/session.svelte";
+  import { describeSavedSession, exportSessionLogViaDialog } from "$lib/savedSessions.svelte";
 
   let playerName = $state("");
   let playerColor = $state("#3b82f6");
@@ -20,6 +28,15 @@
   let error = $state<string | null>(null);
   let myTicket = $state<string | null>(null);
   let myLanUrl = $state<string | null>(null);
+  let savedSessions = $state<SavedSessionSummary[]>([]);
+
+  async function refreshSaved() {
+    try {
+      savedSessions = await sessionListSaved();
+    } catch {
+      savedSessions = [];
+    }
+  }
 
   const sessionPin = $derived(sessionState.info?.pin ?? null);
 
@@ -50,6 +67,7 @@
       sessionState.connected = true;
       myTicket = info.p2p_ticket;
       myLanUrl = info.lan_url;
+      void refreshSaved();
 
       const transport = createTransport(playerName);
       await transport.connect();
@@ -105,14 +123,26 @@
     }
   }
 
-  async function handleLoad(e: Event) {
-    e.preventDefault();
-    if (!campaignState.active) return;
+  async function handleResume(s: SavedSessionSummary) {
+    if (!playerName.trim()) {
+      error = "Enter your name first";
+      return;
+    }
     loading = true;
     error = null;
     try {
-      // We'd need a session picker - for now just show an error
-      error = "Session load not yet implemented - pick a session ID";
+      const info = await sessionLoad(s.campaign, s.session_id, playerName);
+      sessionState.info = info;
+      sessionState.connected = true;
+      myTicket = info.p2p_ticket;
+      myLanUrl = info.lan_url;
+
+      const transport = createTransport(playerName);
+      await transport.connect();
+      transport.onPatch(applyPatch);
+      transport.onPresence(applyPresence);
+
+      goto("/table/play");
     } catch (e) {
       error = String(e);
     } finally {
@@ -125,6 +155,21 @@
   // stored prefs with blank defaults (12.2-found race).
   let prefsLoaded = false;
 
+  async function handleExportLog(s: SavedSessionSummary) {
+    error = null;
+    try {
+      const path = await exportSessionLogViaDialog(s);
+      if (path === null) {
+        error = "Export cancelled";
+        setTimeout(() => (error = null), 2000);
+      } else {
+        copyToClipboard(path, "export path");
+      }
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
   onMount(async () => {
     const stored = localStorage.getItem("pf2e.playerName");
     if (stored) playerName = stored;
@@ -132,6 +177,7 @@
     if (storedColor) playerColor = storedColor;
     prefsLoaded = true;
     await refreshCampaigns();
+    await refreshSaved();
   });
 
   function savePlayerPrefs() {
@@ -265,6 +311,24 @@
     </button>
   </form>
 </section>
+
+{#if savedSessions.length > 0}
+  <section class="panel">
+    <header><h2>Saved Sessions</h2></header>
+    <ul class="saved-list">
+      {#each savedSessions as s (s.session_id)}
+        <li>
+          <span class="saved-desc">{describeSavedSession(s)}</span>
+          {#if s.ended}<span class="badge-ended">ended</span>{/if}
+          <span class="saved-actions">
+            <button type="button" onclick={() => handleResume(s)} disabled={loading || !playerName.trim()}>Resume</button>
+            <button type="button" onclick={() => handleExportLog(s)}>Export log</button>
+          </span>
+        </li>
+      {/each}
+    </ul>
+  </section>
+{/if}
 
 <style>
   .hero {
@@ -431,6 +495,53 @@
   .muted a {
     color: inherit;
     text-decoration: underline;
+  }
+
+  .saved-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .saved-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+  }
+  .saved-desc {
+    flex: 1;
+    min-width: 12rem;
+  }
+  .badge-ended {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .saved-actions {
+    display: flex;
+    gap: 0.4rem;
+  }
+  .saved-actions button {
+    font: inherit;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg-soft);
+    color: inherit;
+    cursor: pointer;
+  }
+  .saved-actions button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .err {

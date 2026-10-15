@@ -79,7 +79,8 @@ export async function spawnLiveHost(opts?: { pin?: string }): Promise<LiveHost> 
   // src-tauri/ from tests/e2e/server/ — URL math keeps node:url/node:path
   // out of the type-checked surface (unix dev shells per PLAN §7).
   const srcTauri = new URL("../../../src-tauri/", import.meta.url).pathname;
-  // @ts-expect-error — node builtin, untyped under tsconfig types:[]
+  // Post-merge the shim (e2e/node-shims.d.ts) types node:child_process;
+  // ChildProc narrows its surface to what this driver uses.
   const cp = await import("node:child_process");
   const spawn = cp.spawn as (
     cmd: string,

@@ -486,6 +486,7 @@ impl SessionDoc {
                 Some(s) if !s.is_empty() => Some(s),
                 _ => None,
             };
+            out.meta.ended = get_bool(doc, &meta, "ended").unwrap_or(false);
         }
 
         if let Some(players) = child(doc, &ROOT, "players") {

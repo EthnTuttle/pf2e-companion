@@ -18,3 +18,6 @@ tests/e2e/screenshots/
 tools/imagery/staging/
 tools/imagery/.venv/
 tools/imagery/review.html
+
+# UI-shots harness (e2e/shots.ts — phase 15)
+shots/

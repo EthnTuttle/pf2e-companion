@@ -15,6 +15,7 @@
     sceneVistaPath,
     type CoverInfo,
   } from "$lib/images";
+  import { exportSessionLogViaDialog } from "$lib/savedSessions.svelte";
 
   let transport: ReturnType<typeof createTransport> | null = null;
   let activeTab = $state<"chat" | "initiative" | "party" | "scene" | "handouts" | "gm">("chat");
@@ -121,8 +122,29 @@
   }
 
   function endSession(_e?: MouseEvent) {
-    if (confirm("End this session for everyone?")) {
+    if (confirm("End this session for everyone? Export the session log first if you want a transcript.")) {
       sessionIntent({ kind: "end_session" } as Intent);
+    }
+  }
+
+  let exportStatus = $state<string | null>(null);
+
+  async function exportSessionLog() {
+    if (!isGm || !sessionState.info) return;
+    exportStatus = null;
+    try {
+      const path = await exportSessionLogViaDialog({
+        name: sessionState.snapshot?.meta.name ?? sessionState.info.name,
+        session_id: sessionState.info.session_id,
+      });
+      if (path === null) {
+        exportStatus = "Export cancelled";
+      } else {
+        navigator.clipboard.writeText(path);
+        exportStatus = `Exported to ${path} (path copied to clipboard)`;
+      }
+    } catch (e) {
+      exportStatus = String(e);
     }
   }
 
@@ -690,6 +712,8 @@
             {:else if gmDrawerTab === "tools"}
               <div class="gm-tools">
                 <h4>Session Tools</h4>
+                <button onclick={exportSessionLog}>Export session log</button>
+                {#if exportStatus}<p class="muted">{exportStatus}</p>{/if}
                 <button onclick={endSession} class="danger">End Session</button>
               </div>
             {/if}
@@ -1623,6 +1647,23 @@
   .gm-tools h4 {
     margin: 0 0 0.5rem;
     font-size: 0.85rem;
+  }
+  .gm-tools button {
+    width: 100%;
+    font: inherit;
+    padding: 0.6rem;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--bg-soft);
+    color: inherit;
+    cursor: pointer;
+    margin-bottom: 0.4rem;
+  }
+  .gm-tools p.muted {
+    margin: 0 0 0.5rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+    word-break: break-all;
   }
   .gm-tools button.danger {
     width: 100%;

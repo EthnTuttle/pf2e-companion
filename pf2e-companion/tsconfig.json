@@ -14,15 +14,19 @@
     // store doesn't expose at the project root — without this override
     // svelte-check reports it as a warning. The one Node global in a checked
     // file (vite.config.js `process`) already carries @ts-expect-error.
-    "types": []
+    "types": [],
+    // Node's type-stripping runtime needs explicit .ts import extensions in
+    // e2e/ (no bundler); noEmit (inherited) makes them legal here too.
+    "allowImportingTsExtensions": true
   },
   // Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
   // except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
   //
   // Include list re-declared from .svelte-kit/tsconfig.json (TS does not merge
-  // `include` through `extends`), and extended with the Phase 12 E2E harness
-  // (docs/phase12/PLAN.md §3.5) so `pnpm check` type-checks harness, fixtures,
-  // and specs — fixture drift against $lib/ipc types fails the build.
+  // `include` through `extends`), extended with BOTH harnesses: the Phase 12
+  // gameflow lane (tests/e2e, docs/phase12/PLAN.md §3.5) and the phase-15
+  // UI-shots lane (e2e/, docs/plans/PLAN-TIER1-ui-shots.md) — fixture drift
+  // against $lib/ipc types fails the build.
   "include": [
     ".svelte-kit/ambient.d.ts",
     ".svelte-kit/non-ambient.d.ts",
@@ -38,6 +42,8 @@
     "./tests/**/*.js",
     "./tests/**/*.ts",
     "./tests/**/*.svelte",
-    "./tests/e2e/**/*.ts"
+    "./tests/e2e/**/*.ts",
+    "./e2e/**/*.ts",
+    "./e2e/**/*.js"
   ]
 }

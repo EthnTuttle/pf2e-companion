@@ -2,11 +2,16 @@
 
 Cross-platform PF2e Remaster + Christian Biblical worldview reference & worldbuilding companion. Tauri 2 + SvelteKit + SQLite (FTS5 + sqlite-vec).
 
-> **Status**: Phase 12 — Playwright E2E harness (27 deterministic + 4 live-LAN scenarios, screenshot evidence per route/gameflow step) + imagery v1 (generation pipeline + 14 Lewisian adventure assets, per-lens art directions in `docs/imagery/`).
+> **Status**: Friends-beta slices shipped (session log export, diagnostics, first-run wizard, UI-shots harness) + Phase 12 E2E harness (27 deterministic + 4 live-LAN scenarios) + imagery v1 (pipeline + 14 Lewisian adventure assets bundled). Handoff state: `docs/STATUS.md`.
 > Shipping roadmap to a broadly-playable release: `docs/SHIPPING.md`.
 > Plan: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2e-biblical-reference-2026-05-25.md`.
 
 ## What works
+
+### Tier 1 — first-run wizard (done)
+- **`/onboarding`** (3 screens: vault location → lens pick → optional LLM) shows only on a genuine first run — no settings.json and no campaigns in the default vault. Existing installs are auto-migrated and never see it.
+- **Relocatable vault**: pick (or type) a custom vault folder in the wizard and the app restarts once to re-point the watcher; search drops old-root entities (the SQLite index is derived and cleared on the vault change). The setting lives at `<app_data>/settings.json` — hand-rolled, atomic write.
+- **Lens persistence**: the lens picked in the wizard — or changed in the topbar picker — survives relaunch (`localStorage`).
 
 ### Phase 0 — scaffold (done)
 - Tauri 2 + SvelteKit + TypeScript skeleton.
@@ -179,6 +184,17 @@ cd src-tauri && cargo test
 pnpm tauri build --no-bundle
 ```
 
+### Diagnostics (no telemetry)
+
+`/settings` (topbar → Settings) has a **Copy diagnostics** button that puts a
+paste-ready markdown blob on your clipboard — app version, OS, arch, active
+session, and the last 2,000 log lines from the in-memory ring. Nothing is ever
+sent anywhere; the blob only leaves your machine when you paste it (e.g. into
+a GitHub issue). Hosting or resuming a session also appends to a per-session
+log twin at `<vault>/campaigns/<id>/sessions/<session-id>.log` (the `.log`
+extension keeps it out of the vault watcher); peers keep ring-only logging —
+the host files the bug reports.
+
 ### Env-gated tests (off by default)
 
 | Env var | Test | Purpose |
@@ -227,6 +243,7 @@ Full spec: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2
 
 ## Run your first game
 
+0. **First run**: the `/onboarding` wizard sets your vault folder, lens, and (optionally) an LLM provider. Skip it and sane defaults apply — it never shows again.
 1. **Host**: Open `/table` in the Tauri app. Enter your name, pick a color, choose a campaign (create one in `/vault` if needed), optionally pick "The Widow's Lamp" adventure, click **Host Session**.
 2. **Share**: The lobby shows a **P2P Ticket** (desktop peers), a **LAN URL** (mobile), and a **Table PIN** (6 chars, required for LAN joins). Copy and send the appropriate invite.
 3. **Join**: Desktop peers paste the ticket on `/table` → **Join Session**. Mobile users open the LAN URL (e.g., `ws://192.168.1.42:4780/abc123?pin=ABC123`) in browser or Tauri Android/iOS app.
@@ -235,7 +252,8 @@ Full spec: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2
 6. **First Roll**: In **Chat+Dice** tab, type `/roll 1d20+7` → Enter. Result appears with per-die breakdown.
 7. **Secret GM Roll**: In **GM Drawer** (GM tab or overlay), type `/roll 2d6+3 --secret` → Enter. Roll is hidden from players, visible only to GM.
 8. **Handout Reveal**: In **Handouts** tab, GM clicks **Reveal to Players** on a handout. All players see it immediately.
-9. **End / Resume**: GM clicks **End Session** → confirms. Later, host uses **Load Session** on `/table` to resume from the saved automerge document.
+9. **End / Resume**: GM clicks **End Session** → confirms. Later, host uses the **Saved Sessions** list on `/table` to **Resume** from the saved automerge document.
+10. **Export session log**: From the GM drawer (**GM → Tools → Export session log**) or the lobby's **Saved Sessions** list, export a markdown transcript (header, roster, chat + dice, handouts) via a save-as dialog. If the dialog is unavailable (e.g. some mobile setups), the log falls back to `<vault>/campaigns/<id>/sessions/<session-id>.log.md` and the path is shown. Cancelling writes nothing.
 
 ## Phase 6 next steps
 
@@ -310,7 +328,7 @@ src/
     transport.ts    + two-backend Transport interface (ipcTransport, wsTransport, mockTransport, createTransport)
     session.svelte.ts  reactive store (applyPatch reducer, derived state, sendIntent)
   routes/
-    table/+page.svelte           lobby (host/join/invite)
+    table/+page.svelte           lobby (host/join/invite, saved sessions)
     table/play/+page.svelte      play surface (6 tabs, grid, dice, sheets)
 ```
 
@@ -318,7 +336,14 @@ src/
 
 Opt-in pipeline for lens-faithful generated art (analysis: `docs/imagery/DEDUCTION.md`).
 
-- **Status:** tooling + UI seams landed; the v1 batch (14 lewisian assets in `tools/imagery/specs/v1.json`) is **pending** — nothing is generated or bundled until a human runs generation with a funded `PPQ_API_KEY`, reviews `tools/imagery/review.html`, and promotes.
-- **Pipeline:** `cd tools/imagery && .venv/bin/python gen.py` (dry-run without a key; $15 hard cap, batch stops at 80%) → review `review.html` → `promote.py <id>` (WebP finalize + frontmatter injection; requires alt text).
-- **In-app:** one IPC (`get_entity_image`) serves bundled `data:` URLs; entity hero (banner/portrait), play-surface cover banner/thumb, scene vista, handout plates, and NPC token portraits all degrade silently to today's text/placeholder fallbacks when art is absent.
-- **Alt text is English-only** and required at promotion time.
+- **Status:** v1 landed — 14 Lewisian adventure assets bundled (~998 KiB WebP; $0.00 spend in the nano-banana promo window). Future batches: add specs, re-run below.
+- **Pipeline:** `cd tools/imagery && PPQ_API_KEY=… .venv/bin/python gen.py` ($15 hard cap, batch stops at 80%) → review `review.html` → `promote.py approve <id> && promote.py run` (WebP finalize + frontmatter injection; requires alt text).
+- **In-app:** one IPC (`get_entity_image`) serves bundled `data:` URLs; entity hero, play-surface cover/vista/handout plates, and NPC token portraits degrade silently to text fallbacks when art is absent.
+- **Alt text is English-only** and required at promotion time. AI-generated art disclosed on the About page (licensing pass, SHIPPING Tier 2 §8).
+
+## Support
+
+Development tips appreciated: **average@minibits.cash** (Lightning Address, via the repo's Sponsor button).
+
+Tips only — no store, no accounts, nothing in-app. `docs/research/nostr-integration-analysis.md` explains why monetization deliberately stays outside the app (app-store policy + the out-of-scope list in `docs/SHIPPING.md`).
+

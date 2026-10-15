@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
-// @ts-expect-error @types/node is not resolvable here (pnpm strict store);
-// harness mode is only ever set by the POSIX e2e job / local dev shells.
+// e2e/node-shims.d.ts declares node:url post-merge; process stays shimmed-out
+// (declared locally in e2e/shots.ts), so its guard below remains.
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error process is a nodejs global
