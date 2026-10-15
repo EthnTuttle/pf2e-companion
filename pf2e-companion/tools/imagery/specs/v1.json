@@ -1,0 +1,274 @@
+{
+  "batch": "v1",
+  "created": "2026-10-14",
+  "note": "14 lewisian assets per docs/imagery/DEDUCTION.md \u00a75.1. JSON (not YAML) so the pipeline needs only stdlib + Pillow. Bump an asset's `v` and edit `brief` together when a prompt changes materially \u2014 the new client_request_id retires the old cell.",
+  "assets": [
+    {
+      "id": "cover-widows-lamp",
+      "title": "Cover: The Widow's Lamp",
+      "lens": "lewisian",
+      "adventure": "widows-lamp",
+      "role": "cover",
+      "aspect": "3:4",
+      "cap_px": 1024,
+      "target": "lewisian/art/adventures/widows-lamp/cover.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash plate: a rain-swept dockside street at dusk, crooked timber tenements leaning into the wind, and one narrow three-story tenement whose single ground-floor window glows with steady amber lamplight.",
+      "brief": "A rain-swept dockside street at dusk: crooked three-story tenements of dark timber lean into the wind on wet cobblestones, and in the narrowest tenement a single ground-floor window glows with steady warm amber lamplight; a small wooden sign swings from one chain over its door; no people in the street, no patrol lanterns, sheets of rain, slate grey-blue storm light \u2014 the one amber window is the painting's single small pale-gold light point; quiet, stubborn hope in a storm.",
+      "wire": {
+        "kind": "adventure_frontmatter",
+        "file": "lewisian/adventures/the-widows-lamp/widows-lamp.md"
+      }
+    },
+    {
+      "id": "cover-roof-of-mercy",
+      "title": "Cover: The Roof of Mercy",
+      "lens": "lewisian",
+      "adventure": "roof-of-mercy",
+      "role": "cover",
+      "aspect": "3:4",
+      "cap_px": 1024,
+      "target": "lewisian/art/adventures/roof-of-mercy/cover.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash plate: a crowded two-story clay-tiled house in a small courtyard, townsfolk pressing at the door, while four young men on the clay-tile roof pry up tiles and hoist a stretcher by ropes.",
+      "brief": "A modest two-story clay-tiled house in a small hill-town courtyard on a bright autumn morning, its shutters thrown wide; a dense crowd of townsfolk in simple homespun presses shoulder-to-shoulder at its door and windows and spills into the yard; on the clay-tile roof four young men kneel, prying up tiles and hoisting a rope-slung stretcher up from the crowd's edge; every figure small within the scene, soft morning light, hopeful hush \u2014 the sun-break over the roofline is the single small pale-gold light point.",
+      "wire": {
+        "kind": "adventure_frontmatter",
+        "file": "lewisian/adventures/the-roof-of-mercy/roof-of-mercy.md"
+      }
+    },
+    {
+      "id": "handout-letter",
+      "title": "Handout plate: The Collector's Letter",
+      "lens": "lewisian",
+      "adventure": "widows-lamp",
+      "role": "handout",
+      "aspect": "3:4",
+      "cap_px": 768,
+      "target": "lewisian/art/adventures/widows-lamp/handout-letter.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash still life: a folded vellum letter sealed with black wax, a plain coin pressed into the seal instead of a signet, an iron-grey quill beside it on a dark oak table.",
+      "brief": "Still life on a dark oak table: a folded vellum letter sealed with a blob of black wax into which a plain dull coin has been pressed instead of a signet, an iron-grey quill laid beside it; the vellum's writing is turned away from the viewer so no lettering shows \u2014 only the wax, the coin, and the fold cast long shadows in cold slate window light; legalistic, wintry, quietly menacing.",
+      "wire": {
+        "kind": "handout",
+        "file": "lewisian/adventures/the-widows-lamp/widows-lamp.md",
+        "handout_id": "letter"
+      }
+    },
+    {
+      "id": "handout-journal",
+      "title": "Handout plate: Mara's Journal",
+      "lens": "lewisian",
+      "adventure": "widows-lamp",
+      "role": "handout",
+      "aspect": "3:4",
+      "cap_px": 768,
+      "target": "lewisian/art/adventures/widows-lamp/handout-journal.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash still life: a slim water-stained notebook with warped pages on a rain-spotted windowsill, beside a small brass oil lamp burning with one steady pale-gold flame.",
+      "brief": "Still life on a rain-spotted wooden windowsill: a slim water-stained notebook with a worn cloth cover, its warped pages showing only blurred illegible pen-strokes from old water damage; beside it a small brass oil lamp burns with one steady pale-gold flame; warm cream-paper tones, patient and tender \u2014 the lamp flame is the single small pale-gold light point.",
+      "wire": {
+        "kind": "handout",
+        "file": "lewisian/adventures/the-widows-lamp/widows-lamp.md",
+        "handout_id": "journal"
+      }
+    },
+    {
+      "id": "handout-prayer",
+      "title": "Handout plate: The Paralytic's Prayer",
+      "lens": "lewisian",
+      "adventure": "roof-of-mercy",
+      "role": "handout",
+      "aspect": "3:4",
+      "cap_px": 768,
+      "target": "lewisian/art/adventures/roof-of-mercy/handout-prayer.webp",
+      "style": "styles/lewisian.md",
+      "v": 2,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash still life: a crumpled vellum sheet smoothed flat by years of folding, covered in faded sepia pen-lines, lying on a plain wooden table under soft morning light from a torn roof opening.",
+      "brief": "Still life: a crumpled piece of vellum, smoothed flat by years of folding and unfolding, its old sepia writing faded by water and time into flowing wavy horizontal lines, dashes and blurred smudges \u2014 strictly no letterforms, no word shapes, no cursive, no legible characters of any kind, the marks read as abstract stains at a glance; it lies on a plain wooden table beneath a shaft of soft morning light falling through a torn-open clay roof above, dust motes in the beam; gentle, hopeful, deeply worn \u2014 the light shaft is the single small pale-gold light point.",
+      "wire": {
+        "kind": "handout",
+        "file": "lewisian/adventures/the-roof-of-mercy/roof-of-mercy.md",
+        "handout_id": "paralytics-prayer"
+      }
+    },
+    {
+      "id": "npc-widow-mara",
+      "title": "Token: Widow Mara",
+      "lens": "lewisian",
+      "adventure": "widows-lamp",
+      "role": "token",
+      "aspect": "1:1",
+      "cap_px": 256,
+      "target": "lewisian/art/adventures/widows-lamp/npc-widow-mara.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash portrait vignette of Widow Mara: an elderly dock-ward woman in a dark kerchief and worn moss-green shawl, one thin hand on a wooden cane, kind but sharp eyes.",
+      "brief": "Head-and-shoulders portrait vignette on cream paper: an elderly dock-ward widow, a thin weathered face, wispy grey hair under a plain dark kerchief, a worn moss-green woolen shawl, kind but sharp eyes that have outlasted fear, one thin hand resting on a plain wooden cane; fragile but unbowed.",
+      "wire": {
+        "kind": "npc_sidecar",
+        "file": "lewisian/adventures/the-widows-lamp/widows-lamp.widow-mara.statblock.json"
+      }
+    },
+    {
+      "id": "npc-lamplighter",
+      "title": "Token: The Lamplighter",
+      "lens": "lewisian",
+      "adventure": "widows-lamp",
+      "role": "token",
+      "aspect": "1:1",
+      "cap_px": 256,
+      "target": "lewisian/art/adventures/widows-lamp/npc-lamplighter.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash portrait vignette of the Lamplighter: a gentle ageless face deep in the hood of an oilskin cloak, holding a tall brass lantern staff whose small lamp burns pale gold.",
+      "brief": "Head-and-shoulders portrait vignette on cream paper: a mysterious timeless lamplighter, a gentle ageless face deep in the hood of a rain-dark oilskin cloak, calm watchful eyes, holding a tall brass-poled lantern staff whose small lamp burns with one steady pale-gold flame; humble and quiet, half in dusk-blue shadow \u2014 the staff lamp is the single small pale-gold light point; no wings, no halo, majesty kept quiet.",
+      "wire": {
+        "kind": "npc_sidecar",
+        "file": "lewisian/adventures/the-widows-lamp/widows-lamp.lamplighter.statblock.json"
+      }
+    },
+    {
+      "id": "npc-debt-collector",
+      "title": "Token: Debt Collector of the Iron Ledger",
+      "lens": "lewisian",
+      "adventure": "widows-lamp",
+      "role": "token",
+      "aspect": "1:1",
+      "cap_px": 256,
+      "target": "lewisian/art/adventures/widows-lamp/npc-debt-collector.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash portrait vignette of the Debt Collector: a gaunt figure in a severe charcoal greatcoat, face hidden behind a smooth featureless iron mask, a chain-bound black ledger clutched to its chest.",
+      "brief": "Head-and-shoulders portrait vignette on cream paper: an infernal debt-collector, a gaunt figure in a severe charcoal greatcoat of legalist cut, the face wholly hidden behind a smooth featureless iron mask, a heavy chain-bound black ledger clutched to the chest; cold slate-grey register, menacing through bureaucracy and procedure \u2014 never gore, no occult symbols.",
+      "wire": {
+        "kind": "npc_sidecar",
+        "file": "lewisian/adventures/the-widows-lamp/widows-lamp.debt-collector.statblock.json"
+      }
+    },
+    {
+      "id": "npc-thug",
+      "title": "Token: Thug (reusable)",
+      "lens": "lewisian",
+      "adventure": "widows-lamp",
+      "role": "token",
+      "aspect": "1:1",
+      "cap_px": 256,
+      "target": "lewisian/art/adventures/widows-lamp/npc-thug.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash portrait vignette of a dock-ward thug: a heavyset enforcer in a patched oilcloth coat and sodden flat cap, heavy gloves, sullen jaw, rain on his shoulders.",
+      "brief": "Head-and-shoulders portrait vignette on cream paper: a dock-ward thug, a heavyset human enforcer in a patched oilcloth coat and a sodden flat cap pulled low, heavy gloves, a sullen jaw and small hard eyes, rain beading on his shoulders; brutish but ordinary \u2014 a man hired for coin, not a monster.",
+      "wire": {
+        "kind": "npc_sidecar",
+        "file": "lewisian/adventures/the-widows-lamp/widows-lamp.thug.statblock.json"
+      }
+    },
+    {
+      "id": "npc-wandering-teacher",
+      "title": "Token: Wandering Teacher (rear/distant)",
+      "lens": "lewisian",
+      "adventure": "roof-of-mercy",
+      "role": "token",
+      "aspect": "1:1",
+      "cap_px": 256,
+      "target": "lewisian/art/adventures/roof-of-mercy/npc-wandering-teacher.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash vignette of the Wandering Teacher seen from behind at a distance: weathered sand-colored robes, mid-gesture, the backs of a listening crowd's heads in the foreground.",
+      "brief": "A traveling teacher seen from behind and at a little distance, mid-gesture as he addresses a crowd: weathered sand-colored robes, dust on the hem, simple worn sandals; the backs of the listening crowd's heads soft in the foreground; his face is never visible \u2014 authority carried by posture and by the crowd's utter attention, morning light around him.",
+      "wire": {
+        "kind": "npc_sidecar",
+        "file": "lewisian/adventures/the-roof-of-mercy/roof-of-mercy.wandering-teacher.statblock.json"
+      }
+    },
+    {
+      "id": "npc-paralytic-elian",
+      "title": "Token: Paralytic Elian",
+      "lens": "lewisian",
+      "adventure": "roof-of-mercy",
+      "role": "token",
+      "aspect": "1:1",
+      "cap_px": 256,
+      "target": "lewisian/art/adventures/roof-of-mercy/npc-paralytic-elian.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash portrait vignette of Elian: a young man on a woven stretcher mat, propped on one elbow, lower body still beneath a homespun blanket, face lifted and bright-eyed with hope.",
+      "brief": "Low portrait vignette on cream paper: a young man lying on a woven stretcher mat, propped on one elbow, his lower body still beneath a plain homespun blanket, his face lifted and bright-eyed with a hope that has outlasted years of closed doors, travel-worn cloak; four friends' hands grip the stretcher corners just at the frame's edge; dignified, never pitiable.",
+      "wire": {
+        "kind": "npc_sidecar",
+        "file": "lewisian/adventures/the-roof-of-mercy/roof-of-mercy.paralytic-elian.statblock.json"
+      }
+    },
+    {
+      "id": "npc-temple-scribe",
+      "title": "Token: Temple Scribe (reusable)",
+      "lens": "lewisian",
+      "adventure": "roof-of-mercy",
+      "role": "token",
+      "aspect": "1:1",
+      "cap_px": 256,
+      "target": "lewisian/art/adventures/roof-of-mercy/npc-temple-scribe.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Storybook ink-and-wash portrait vignette of a Temple Scribe: layered grey-brown ceremonial robes with a formal sash, arms folded across a writing board, scroll case at the hip, a pursed disapproving expression.",
+      "brief": "Head-and-shoulders portrait vignette on cream paper: an officious temple scribe in layered grey-brown ceremonial robes with a formal sash, arms folded across a wooden writing board, a scroll case at his hip, a pursed disapproving mouth and narrowed measuring eyes; rigid and procedural, a gatekeeper of proper channels \u2014 officious, not wicked.",
+      "wire": {
+        "kind": "npc_sidecar",
+        "file": "lewisian/adventures/the-roof-of-mercy/roof-of-mercy.temple-scribe.statblock.json"
+      }
+    },
+    {
+      "id": "scene-widows-lamp-1",
+      "title": "Vista: Dock Ward in rain (scene 1)",
+      "lens": "lewisian",
+      "adventure": "widows-lamp",
+      "role": "scene",
+      "aspect": "16:9",
+      "cap_px": 1280,
+      "target": "lewisian/art/adventures/widows-lamp/scene-1.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Wide storybook ink-and-wash vista: a rain-soaked dock ward at dusk, slate-grey sheets of rain over dark cobblestones and crooked timber tenements, one narrow tenement's ground-floor window glowing steady amber.",
+      "brief": "Wide establishing plate of a rain-soaked dock ward at dusk: slate grey-blue sheets of rain over dark cobblestones and crooked timber tenements, one narrow three-story tenement leaning into the wind with a single ground-floor window glowing steady amber, a small sign swinging from one chain above its door, empty street, far harbor masts lost in the gloom; mood of stubborn hope in a storm \u2014 the amber window is the single small pale-gold light point.",
+      "wire": {
+        "kind": "none"
+      }
+    },
+    {
+      "id": "scene-roof-of-mercy-1",
+      "title": "Vista: The courtyard house (scene 1)",
+      "lens": "lewisian",
+      "adventure": "roof-of-mercy",
+      "role": "scene",
+      "aspect": "16:9",
+      "cap_px": 1280,
+      "target": "lewisian/art/adventures/roof-of-mercy/scene-1.webp",
+      "style": "styles/lewisian.md",
+      "v": 1,
+      "status": "pending",
+      "alt": "Wide storybook ink-and-wash vista: a modest two-story clay-tiled house in a hill-town courtyard on an autumn morning, a dense crowd pressing at its open door, a stretcher bearing a still figure at the crowd's edge.",
+      "brief": "Wide establishing plate of a small courtyard in a hill town on an autumn morning: a modest two-story clay-tiled house with shutters thrown wide, a dense crowd in plain homespun pressing shoulder-to-shoulder at its door and spilling into the yard, every face turned toward the doorway in attentive hush; at the crowd's edge a stretcher bears a still figure whose eyes are bright; soft golden morning light breaking over the roofline is the single small pale-gold light point; the air hums with attention.",
+      "wire": {
+        "kind": "none"
+      }
+    }
+  ]
+}

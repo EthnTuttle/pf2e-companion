@@ -130,6 +130,14 @@ export interface EntityDetail {
 export const getEntity = (id: string) =>
   invoke<EntityDetail | null>("get_entity", { id });
 
+/**
+ * Imagery v1 (docs/imagery/DEDUCTION.md §4.3): the single image IPC every
+ * seam funnels through. `path` is lens-prefixed pack-relative
+ * (`lewisian/art/…/cover.webp`); rejects to null-swallowing callers.
+ */
+export const getEntityImage = (path: string) =>
+  invoke<string>("get_entity_image", { path });
+
 // === Phase 3 ===========================================================
 
 export interface Campaign {
@@ -381,6 +389,8 @@ export interface Token {
   x: number;
   y: number;
   label: string;
+  /** imagery v1: full bundled art path (`<lens>/art/…`); absent/"" = fallback chip */
+  image?: string;
 }
 
 export interface RollRecord {
@@ -421,7 +431,13 @@ export interface SessionSnapshot {
   chat: ChatEntry[];
   init: { order: string[]; active_idx: number; round: number };
   scene: { grid: Grid; background_entity_id: string | null; tokens: Record<string, Token> };
-  handouts: Record<string, { entity_id: string; visible_to: "all" | "gm" }>;
+  handouts: Record<string, {
+    entity_id: string;
+    visible_to: "all" | "gm";
+    /** imagery v1: pack-relative art plate; absent/"" when unwired */
+    image?: string;
+    image_alt?: string;
+  }>;
 }
 
 export type PatchEvent =

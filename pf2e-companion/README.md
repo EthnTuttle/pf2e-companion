@@ -2,7 +2,7 @@
 
 Cross-platform PF2e Remaster + Christian Biblical worldview reference & worldbuilding companion. Tauri 2 + SvelteKit + SQLite (FTS5 + sqlite-vec).
 
-> **Status**: Phase 11 — Live Table (real-time multiplayer) + second adventure + a11y cleanup.
+> **Status**: Phase 12 — Playwright E2E harness (27 deterministic + 4 live-LAN scenarios, screenshot evidence per route/gameflow step) + imagery v1 (generation pipeline + 14 Lewisian adventure assets, per-lens art directions in `docs/imagery/`).
 > Shipping roadmap to a broadly-playable release: `docs/SHIPPING.md`.
 > Plan: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2e-biblical-reference-2026-05-25.md`.
 
@@ -128,6 +128,35 @@ at `~/wiki/topics/pf2e-biblical-reskin/` and `~/wiki/topics/pf2e-worldbuilding-t
 on the maintainer's machine — PRs that update wiki sources should flow into
 content-pack updates the same way the Phase 5 lens packs were authored.
 
+## Lore imagery
+
+Generated art (2 covers, 3 handout plates, 7 NPC tokens, 2 scene vistas for
+v1) is planned in [`docs/imagery/DEDUCTION.md`](docs/imagery/DEDUCTION.md) and
+produced by the pipeline in [`tools/imagery/`](tools/imagery/README.md):
+PayPerQ `nano-banana-2-1` (single provider, $15 hard cap ledgered in
+`MANIFEST.json`), staged candidates, human contact-sheet review against each
+lens's do-not checklist, then promotion into
+`src-tauri/data/content/<lens>/art/` with `image` / `image_alt` /
+`image_provenance` frontmatter. Promotion requires a human approval **and**
+alt text — the a11y gate refuses otherwise.
+
+The app is art-optional by construction: one `get_entity_image` IPC serves
+promoted plates, and every UI slot (entity hero, adventure cover, handout
+cards, scene vistas, token portraits) keeps its shipped fallback when an
+asset is absent. Unpromoted art changes nothing but bytes on disk.
+
+Provenance policy: all imagery is AI-generated, human-directed, and
+human-curated; no Paizo art is used, and pure AI output carries no copyright.
+This is stated plainly on the About page, and store submissions must repeat
+the AI-content disclosure (DEDUCTION §4.6.2).
+
+Generation is key-gated (`PPQ_API_KEY`, env only). To run or resume a batch:
+
+```bash
+cd tools/imagery
+PPQ_API_KEY=sk-… .venv/bin/python gen.py   # then compose_sheet.py → promote.py
+```
+
 ## Develop
 
 Prerequisites: Rust 1.77+, Node 20+, pnpm. Python 3 for the seed extractor.
@@ -159,6 +188,18 @@ pnpm tauri build --no-bundle
 | `PF2E_NET_TESTS=1` | `loopback_peers_converge_and_resync_on_change` | Local iroh P2P loopback convergence (existing). |
 
 Default `cargo test` runs NEITHER gui nor WAN test — both early-return without their env vars.
+
+### E2E harness (Playwright, Phase 12)
+
+Chromium E2E against a harness-mode Vite build (`@tauri-apps/api/*` aliased to in-repo mocks); deterministic, headless, no display server. Contract: [`docs/phase12/PLAN.md`](docs/phase12/PLAN.md).
+
+```bash
+pnpm build:harness      # build the harness-mode bundle (what `pnpm e2e` serves)
+pnpm e2e                # deterministic lane: S-scenarios, headless Chromium
+PF2E_E2E_LAN=1 pnpm e2e:live   # @live lane against the real Rust LAN server (env-gated)
+```
+
+Screenshots land in `tests/e2e/screenshots/` (gitignored, uploaded as CI artifacts on the `e2e` job); the HTML report is `playwright-report/`. Evidence-only — no pixel baselines.
 
 ## Architecture
 
@@ -272,3 +313,12 @@ src/
     table/+page.svelte           lobby (host/join/invite)
     table/play/+page.svelte      play surface (6 tabs, grid, dice, sheets)
 ```
+
+## Lore imagery (tools/imagery)
+
+Opt-in pipeline for lens-faithful generated art (analysis: `docs/imagery/DEDUCTION.md`).
+
+- **Status:** tooling + UI seams landed; the v1 batch (14 lewisian assets in `tools/imagery/specs/v1.json`) is **pending** — nothing is generated or bundled until a human runs generation with a funded `PPQ_API_KEY`, reviews `tools/imagery/review.html`, and promotes.
+- **Pipeline:** `cd tools/imagery && .venv/bin/python gen.py` (dry-run without a key; $15 hard cap, batch stops at 80%) → review `review.html` → `promote.py <id>` (WebP finalize + frontmatter injection; requires alt text).
+- **In-app:** one IPC (`get_entity_image`) serves bundled `data:` URLs; entity hero (banner/portrait), play-surface cover banner/thumb, scene vista, handout plates, and NPC token portraits all degrade silently to today's text/placeholder fallbacks when art is absent.
+- **Alt text is English-only** and required at promotion time.

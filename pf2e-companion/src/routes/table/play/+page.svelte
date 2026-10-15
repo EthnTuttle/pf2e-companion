@@ -6,6 +6,15 @@
   import { sessionState, applyPatch, applyPresence, resetSession, clearError, setTransport, setConnectionState, retryConnection, getMyPeerId, getMyRole, getIsGm, getMyPlayer, getActiveInitiativePeer, getChatEntries, getTokens, getVisibleHandouts, getGrid } from "$lib/session.svelte";
   import { createTransport } from "$lib/transport";
   import { lensState } from "$lib/lens.svelte";
+  import EntityImage from "$lib/EntityImage.svelte";
+  import {
+    lensOfEntityId,
+    packArtPath,
+    resolveAdventureCover,
+    resolveArtUrl,
+    sceneVistaPath,
+    type CoverInfo,
+  } from "$lib/images";
 
   let transport: ReturnType<typeof createTransport> | null = null;
   let activeTab = $state<"chat" | "initiative" | "party" | "scene" | "handouts" | "gm">("chat");
@@ -283,12 +292,66 @@
     resetSession();
   });
 
+  // Imagery v1 (DEDUCTION §4.3.2): the doc's background_entity_id drives the
+  // vista. `lens:adventure-<slug>[#scene-N]` → promoted scene art; anything
+  // else leaves the placeholder grid up.
   $effect(() => {
-    if (sessionState.snapshot?.scene.background_entity_id) {
-      // In a real app, this would fetch the entity's image URL
-      // For now, we'll leave it null and the UI shows a placeholder
-    }
+    const path = sceneVistaPath(
+      sessionState.snapshot?.scene.background_entity_id,
+    );
+    sceneBgUrl = null;
+    if (!path) return;
+    let live = true;
+    void resolveArtUrl(path).then((u) => {
+      if (live) sceneBgUrl = u;
+    });
+    return () => {
+      live = false;
+    };
   });
+
+  // Imagery v1 (DEDUCTION §4.3.2 Load flow): cover panel beside the Load
+  // action. The GM action hardcodes widows-lamp, so the preview does too.
+  let loadCover = $state<CoverInfo | null>(null);
+  $effect(() => {
+    let live = true;
+    void resolveAdventureCover(lensState.active, "widows-lamp").then((c) => {
+      if (live) loadCover = c;
+    });
+    return () => {
+      live = false;
+    };
+  });
+
+  // Dismissible cover banner once an adventure is loaded; the text
+  // `.adventure-badge` in the header stays as the fallback/indicator.
+  let coverBanner = $state<CoverInfo | null>(null);
+  let bannerDismissedFor = $state<string | null>(null);
+  $effect(() => {
+    const slug = sessionState.snapshot?.meta.adventure_slug;
+    if (!slug || bannerDismissedFor === slug) {
+      coverBanner = null;
+      return;
+    }
+    let live = true;
+    void resolveAdventureCover(lensState.active, slug).then((c) => {
+      if (live) coverBanner = c;
+    });
+    return () => {
+      live = false;
+    };
+  });
+
+  // Token portraits: the authority stamps `token.image` at adventure-load
+  // when the NPC's promoted portrait is bundled (DEDUCTION §4.3.2); empty →
+  // the token keeps its flat-color fallback chip.
+  function tokenArtPath(token: Token): string | null {
+    return token.image && token.image.trim() ? token.image : null;
+  }
+
+  function handoutArtPath(entityId: string, image: string | undefined) {
+    return packArtPath(lensOfEntityId(entityId), image);
+  }
 </script>
 
 {#if error && !sessionState.connected}
@@ -308,6 +371,20 @@
         {/if}
       </div>
     </header>
+
+    {#if coverBanner}
+      <figure class="cover-banner">
+        <img src={coverBanner.url} alt={coverBanner.alt} />
+        <button
+          type="button"
+          class="dismiss"
+          aria-label="Dismiss adventure cover"
+          onclick={() =>
+            (bannerDismissedFor =
+              sessionState.snapshot?.meta.adventure_slug ?? "")}
+        >×</button>
+      </figure>
+    {/if}
 
     <div class="play-tabs" role="tablist" aria-label="Table tabs">
       {#each tabs as t}
@@ -478,6 +555,15 @@
             {#if isGm}
               <div class="scene-controls">
                 <button onclick={addToken}>+ Token</button>
+                {#if sessionState.snapshot?.meta.adventure_slug}
+                  <button
+                    title="Use the adventure's scene art as the grid backdrop"
+                    onclick={() =>
+                      setSceneBackground(
+                        `${lensState.active}:adventure-${sessionState.snapshot!.meta.adventure_slug}`,
+                      )}
+                  >Adventure BG</button>
+                {/if}
                 <button onclick={() => setSceneBackground(null)}>Clear BG</button>
               </div>
             {/if}
@@ -502,6 +588,13 @@
                   onmousedown={(e) => handleTokenMouseDown(token, e)}
                   onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTokenMouseDown(token, e as unknown as MouseEvent); } }}
                 >
+                  {#if tokenArtPath(token)}
+                    <EntityImage
+                      path={tokenArtPath(token)}
+                      alt="{token.label} portrait"
+                      class="token-art"
+                    />
+                  {/if}
                   <span class="label">{token.label}</span>
                   {#if (isGm || token.owner === myPeerId) && token.pc}
                     <span class="pc-badge">{token.pc}</span>
@@ -529,6 +622,13 @@
                   <button onclick={() => revealHandout(h.id)}>Reveal to Players</button>
                 {/if}
               </header>
+              {#if h.image}
+                <EntityImage
+                  path={handoutArtPath(h.entity_id, h.image)}
+                  alt={h.image_alt ?? ""}
+                  class="handout-art"
+                />
+              {/if}
               <div class="handout-body">
                 <p class="muted">Handout content for entity {h.entity_id} — markdown rendering TBD</p>
               </div>
@@ -543,6 +643,9 @@
           <header>
             <h3>GM Drawer</h3>
             <div class="gm-actions">
+              {#if loadCover}
+                <img class="cover-thumb" src={loadCover.url} alt={loadCover.alt} />
+              {/if}
               <button onclick={handleLoadAdventureClick} class="primary">Load Widow's Lamp</button>
               <button onclick={endSession} class="danger">End Session</button>
             </div>
@@ -1192,6 +1295,7 @@
     user-select: none;
     box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     transition: box-shadow 0.1s;
+    overflow: hidden; /* clip token portraits to the rounded corner */
   }
   .token:active {
     cursor: grabbing;
@@ -1203,13 +1307,73 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+    position: relative;
+    z-index: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   }
-  .token .pc-badge {
+  /* Imagery v1 (DEDUCTION §4.3.2): NPC portrait behind the label; rendered
+     only when promoted art resolves. */
+  :global(.token-art) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+  }
+  .pc-badge {
     font-size: 0.55rem;
     padding: 0.05rem 0.2rem;
     border-radius: 999px;
     background: color-mix(in srgb, hsl(260 60% 50%) 15%, transparent);
     color: hsl(260 60% 70%);
+    position: relative;
+    z-index: 1;
+  }
+  /* Imagery v1 (DEDUCTION §4.3.2 Load flow): dismissible cover banner shown
+     once per adventure load; `.adventure-badge` remains the text fallback. */
+  .cover-banner {
+    position: relative;
+    margin: 0 0 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .cover-banner img {
+    display: block;
+    width: 100%;
+    max-height: 12rem;
+    object-fit: cover;
+  }
+  .cover-banner .dismiss {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: none;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 0.9rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .cover-thumb {
+    width: 2.25rem;
+    height: 2.25rem;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    align-self: center;
+  }
+  /* Imagery v1 (DEDUCTION §4.3.2): promoted handout plate above the body. */
+  :global(.handout-art) {
+    display: block;
+    width: 100%;
+    max-height: 14rem;
+    object-fit: cover;
+    border-bottom: 1px solid var(--line);
   }
   .scene-legend {
     display: flex;

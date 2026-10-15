@@ -863,6 +863,18 @@ pub async fn session_leave(registry: State<'_, Arc<SessionRegistry>>) -> Result<
     Ok(())
 }
 
+/// Serve one bundled art image as a base64 data URL
+/// (docs/imagery/DEDUCTION.md §4.3). This is deliberately the *only* image
+/// IPC: every UI seam (entity hero, adventure cover, handout plate, scene
+/// vista, token portrait) funnels through it. `path` is pack-relative with
+/// the lens id, e.g. `lewisian/art/adventures/widows-lamp/cover.webp`;
+/// misses and traversal attempts are ordinary errors so the UI can fall
+/// back to today's rendering.
+#[tauri::command]
+pub fn get_entity_image(path: String) -> Result<String, String> {
+    crate::images::entity_image_data_url(&path).map_err(|e| e.to_string())
+}
+
 /// The 5 v1 lens packs. Phase 1 returns the manifest; the actual content
 /// packs land in Phase 2 alongside the YHWH and saint entries.
 #[tauri::command]

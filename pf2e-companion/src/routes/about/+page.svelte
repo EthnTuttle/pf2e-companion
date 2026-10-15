@@ -171,6 +171,18 @@
     </tbody>
   </table>
 
+  <h2 id="art-provenance">Art provenance</h2>
+  <p>
+    Any imagery bundled with the packs is AI-generated, human-directed,
+    and human-curated: prompts are versioned in the repo
+    (<code>tools/imagery/</code>), every image passes a human checklist
+    against its lens's doctrinal do-not list before promotion, and its
+    frontmatter records prompt lineage plus alt text. Pure AI output
+    carries no copyright; no Paizo (or other third-party) art is used.
+    Missing art silently falls back to the text UI — images never gate
+    content.
+  </p>
+
   <h2 id="discipline">The design discipline</h2>
   <p>
     Forty years of Christian RPGs taught one durable lesson — what the

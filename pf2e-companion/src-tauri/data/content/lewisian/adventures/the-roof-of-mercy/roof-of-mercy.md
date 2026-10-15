@@ -13,8 +13,18 @@ scenes:
   - { id: scene-2, title: "The Roof Gives Way", encounter: { difficulty: "moderate", npcs: ["temple-scribe", "temple-scribe"] } }
   - { id: scene-3, title: "Take Up Your Mat", read_aloud: "Dust settles on the crowded floor. The teacher looks up from the stretcher now resting at his feet, meets the paralyzed man's eyes, and speaks the words that shatter every expectation: 'Child, your sins are forgiven.' A sharp intake of breath from the scribes in the front rank. The teacher does not flinch. 'Which is easier: to say your sins are forgiven, or to say rise and walk? But that you may know the Son of Man has authority on earth to forgive sins—' He turns to the man. 'Rise, take up your mat, and go home.' Muscles that have not moved in years obey. The man stands, rolls his mat, and walks through the parted crowd into the morning light." }
 handouts:
-  - { id: paralytics-prayer, title: "The Paralytic's Prayer", visible_to: "all", body: "A crumpled vellum, smoothed by years of folding and unfolding. The ink has faded to sepia, but the hand remains steady:\n\n> *Lord of the Open Door,*\n> *You who made the roof as well as the room,*\n> *You who hear the knock of those who cannot reach the threshold —* \n> *Teach us to carry one another.*\n> *Teach us to tear open the ceiling when the door is barred.*\n> *Teach us that forgiveness is not a word spoken from safety,*\n> *But a roof removed, a mat rolled up, a life returned to walking.*\n> *Amen.*\n\nThe margins bear smaller notations in a different hand — answers, perhaps, or additions from those who have prayed this prayer and found it answered." }
+  - { id: paralytics-prayer, image: art/adventures/roof-of-mercy/handout-prayer.webp, image_alt: "Storybook ink-and-wash still life: a crumpled vellum sheet smoothed flat by years of folding, covered in faded sepia pen-lines, lying on a plain wooden table under soft morning light from a torn roof opening.", title: "The Paralytic's Prayer", visible_to: "all", body: "A crumpled vellum, smoothed by years of folding and unfolding. The ink has faded to sepia, but the hand remains steady:\n\n> *Lord of the Open Door,*\n> *You who made the roof as well as the room,*\n> *You who hear the knock of those who cannot reach the threshold —* \n> *Teach us to carry one another.*\n> *Teach us to tear open the ceiling when the door is barred.*\n> *Teach us that forgiveness is not a word spoken from safety,*\n> *But a roof removed, a mat rolled up, a life returned to walking.*\n> *Amen.*\n\nThe margins bear smaller notations in a different hand — answers, perhaps, or additions from those who have prayed this prayer and found it answered." }
 npcs: [wandering-teacher, paralytic-elian, temple-scribe]
+image: art/adventures/roof-of-mercy/cover.webp
+image_alt: "Storybook ink-and-wash plate: a crowded two-story clay-tiled house in a small courtyard, townsfolk pressing at the door, while four young men on the clay-tile roof pry up tiles and hoist a stretcher by ropes."
+image_provenance:
+  generator: ppq
+  model: nano-banana-2-1
+  style_block: styles/lewisian.md@1
+  client_request_id: pf2e-lewisian-cover-roof-of-mercy-v1
+  generated_at: 2026-10-14
+  curated: true
+  promoted_at: 2026-10-14
 ---
 
 # The Roof of Mercy — GM Notes

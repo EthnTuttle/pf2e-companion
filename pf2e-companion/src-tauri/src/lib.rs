@@ -17,6 +17,7 @@ pub mod db;
 pub mod dice;
 pub mod eval;
 mod foundry;
+pub mod images;
 mod keystore;
 pub mod llm;
 pub mod llm_tools;
@@ -92,6 +93,7 @@ pub fn run() {
             commands::list_lenses,
             commands::import_foundry_pack,
             commands::get_entity,
+            commands::get_entity_image,
             commands::list_campaigns,
             commands::create_campaign,
             commands::create_entity,

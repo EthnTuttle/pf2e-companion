@@ -174,11 +174,23 @@ export function getTokens(): Token[] {
 }
 
 /** Derived: handouts visible to me (all if player, all+gm if GM). */
-export function getVisibleHandouts(): Array<{ id: string; entity_id: string; visible_to: "all" | "gm" }> {
+export function getVisibleHandouts(): Array<{
+  id: string;
+  entity_id: string;
+  visible_to: "all" | "gm";
+  image?: string;
+  image_alt?: string;
+}> {
   if (!sessionState.snapshot) return [];
   return Object.entries(sessionState.snapshot.handouts)
     .filter(([, h]) => h.visible_to === "all" || getIsGm())
-    .map(([id, h]) => ({ id, ...h }));
+    .map(([id, h]) => ({
+      id,
+      entity_id: h.entity_id,
+      visible_to: h.visible_to,
+      image: h.image || undefined,
+      image_alt: h.image_alt || undefined,
+    }));
 }
 
 /** Derived: grid config. */

@@ -157,7 +157,12 @@ impl SessionDoc {
             // Tokens from every encounter scene. Every rostered slug gets
             // a token (label from its sidecar when resolvable, else the
             // slug); ids are suffixed with a per-slug index so duplicate
-            // slugs across scenes never collapse.
+            // slugs across scenes never collapse. Imagery v1 (DEDUCTION
+            // §4.3): when the NPC's promoted portrait exists in the pack
+            // embed, stamp its full bundled path onto the token so the
+            // table UI needn't re-derive it; misses leave `image` empty
+            // and the UI keeps its text fallback.
+            let lens = def.id.split(':').next().unwrap_or("");
             let scene = ensure_map(doc, &ROOT, "scene");
             let tokens = ensure_map(doc, &scene, "tokens");
             let mut slot = 0i64;
@@ -188,18 +193,26 @@ impl SessionDoc {
                         doc.put(&t, "x", 3.0 + (slot % 8) as f64 * 2.0)?;
                         doc.put(&t, "y", 3.0 + (slot / 8) as f64 * 2.0)?;
                         doc.put(&t, "label", label)?;
+                        let art =
+                            format!("{lens}/art/adventures/{slug}/npc-{npc_slug}.webp");
+                        if !lens.is_empty() && crate::images::bundled_image_exists(&art) {
+                            doc.put(&t, "image", art.as_str())?;
+                        }
                         slot += 1;
                     }
                 }
             }
 
-            // Handouts (registered with their declared visibility).
+            // Handouts (registered with their declared visibility; imagery
+            // v1 carries the optional art plate + alt through the same map).
             let handouts = ensure_map(doc, &ROOT, "handouts");
             for handout in &def.handouts {
                 if !key_exists(doc, &handouts, &handout.id) {
                     let h = doc.put_object(&handouts, &handout.id, ObjType::Map)?;
                     doc.put(&h, "entity_id", def.id.as_str())?;
                     doc.put(&h, "visible_to", handout.visible_to.as_str())?;
+                    doc.put(&h, "image", handout.image.as_deref().unwrap_or(""))?;
+                    doc.put(&h, "image_alt", handout.image_alt.as_deref().unwrap_or(""))?;
                 }
             }
 
@@ -553,6 +566,8 @@ impl SessionDoc {
                     HandoutState {
                         entity_id: get_str(doc, &h, "entity_id").unwrap_or_default(),
                         visible_to: get_str(doc, &h, "visible_to").unwrap_or("gm".into()),
+                        image: get_str(doc, &h, "image").unwrap_or_default(),
+                        image_alt: get_str(doc, &h, "image_alt").unwrap_or_default(),
                     },
                 );
             }
@@ -782,6 +797,7 @@ fn put_token(doc: &mut AutoCommit, obj: &ObjId, token: &Token) -> Result<()> {
     doc.put(obj, "x", token.x)?;
     doc.put(obj, "y", token.y)?;
     doc.put(obj, "label", token.label.as_str())?;
+    doc.put(obj, "image", token.image.as_str())?;
     Ok(())
 }
 
@@ -804,6 +820,7 @@ fn read_token(doc: &AutoCommit, obj: &ObjId) -> Token {
             _ => 0.0,
         },
         label: get_str(doc, obj, "label").unwrap_or_default(),
+        image: get_str(doc, obj, "image").unwrap_or_default(),
     }
 }
 

@@ -84,6 +84,12 @@ pub struct Token {
     pub x: f64,
     pub y: f64,
     pub label: String,
+    /// Imagery v1 (DEDUCTION §4.3): full bundled art path
+    /// (`<lens>/art/adventures/<slug>/npc-*.webp`), stamped at adventure-load
+    /// time only when the file exists in the bundle. `""` = no art; omitted
+    /// from JSON when empty so pre-art snapshots stay byte-identical.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub image: String,
 }
 
 /// One die-roll record (TS `RollRecord`).
@@ -166,6 +172,14 @@ pub struct HandoutState {
     pub entity_id: String,
     /// `"all"` or `"gm"`.
     pub visible_to: String,
+    /// Imagery v1 (DEDUCTION §4.2): pack-relative art plate under the
+    /// handout's lens pack. `""` on the wire means "no art" (the optional-
+    /// string convention) and the fields are omitted from JSON when empty
+    /// so pre-art snapshots stay byte-identical.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub image: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub image_alt: String,
 }
 
 /// Session metadata (TS `SessionSnapshot.meta`).

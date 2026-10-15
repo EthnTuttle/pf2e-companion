@@ -117,6 +117,7 @@ fn player_cannot_move_a_token_they_do_not_own() {
                 x: 1.0,
                 y: 2.0,
                 label: "ogre".into(),
+                image: String::new(),
             },
         },
     );
@@ -364,6 +365,7 @@ fn token_intents_map_to_upserted_and_removed() {
         x: 1.0,
         y: 1.0,
         label: "Ruth".into(),
+        image: String::new(),
     };
     let events = gm(&mut doc, Intent::AddToken { token: token.clone() });
     match &events[0] {
@@ -435,12 +437,16 @@ fn fixture_def() -> AdventureDef {
                 title: "A Collector's Letter".into(),
                 visible_to: "all".into(),
                 body: None,
+                image: None,
+                image_alt: None,
             },
             pf2e_companion_lib::adventure::HandoutDef {
                 id: "ledger".into(),
                 title: "The Household Ledger".into(),
                 visible_to: "gm".into(),
                 body: None,
+                image: None,
+                image_alt: None,
             },
         ],
         npcs: vec![pf2e_companion_lib::adventure::NpcRef {
@@ -491,6 +497,15 @@ fn load_adventure_populates_slug_tokens_handouts_and_readaloud() {
     assert_eq!(snap.handouts.len(), 2);
     assert_eq!(snap.handouts["ledger"].visible_to, "gm");
     assert!(snap.scene.tokens.contains_key("npc-debt-collector-0"));
+
+    // Imagery v1: the token's art path is stamped exactly when the promoted
+    // portrait is bundled; otherwise the field stays empty (UI fallback).
+    let art = "lewisian/art/adventures/widows-lamp/npc-debt-collector.webp";
+    if pf2e_companion_lib::images::bundled_image_exists(art) {
+        assert_eq!(snap.scene.tokens["npc-debt-collector-0"].image, art);
+    } else {
+        assert!(snap.scene.tokens["npc-debt-collector-0"].image.is_empty());
+    }
 }
 
 #[test]

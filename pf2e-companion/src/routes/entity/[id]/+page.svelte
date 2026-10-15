@@ -4,12 +4,35 @@
   import { goto } from "$app/navigation";
   import { marked } from "marked";
   import { getEntity, type EntityDetail } from "$lib/ipc";
+  import { packArtPath } from "$lib/images";
+  import EntityImage from "$lib/EntityImage.svelte";
   import Statblock from "$lib/Statblock.svelte";
   import Sources from "$lib/Sources.svelte";
 
   let entity = $state<EntityDetail | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
+
+  // Imagery v1 hero (DEDUCTION §4.3.1): adventure/plane art renders as a
+  // banner above `.layout`; every other arted entity gets a right-floating
+  // portrait card inside the prose. Unpromoted art resolves to null and the
+  // page renders exactly as today.
+  let artPath = $derived(
+    packArtPath(
+      entity?.lens,
+      typeof entity?.frontmatter?.image === "string"
+        ? entity.frontmatter.image
+        : null,
+    ),
+  );
+  let artAlt = $derived(
+    typeof entity?.frontmatter?.image_alt === "string"
+      ? entity.frontmatter.image_alt
+      : "",
+  );
+  let artIsBanner = $derived(
+    entity?.type === "adventure" || entity?.type === "plane",
+  );
 
   // Convert [[id]] wikilinks into <a href="/entity/{id}"> before passing to
   // marked. Keep it simple — the brackets are exact, no escapes.
@@ -74,8 +97,16 @@
 {:else if error}
   <p class="err">{error}</p>
 {:else if entity}
+  {#if artIsBanner && artPath}
+    <EntityImage path={artPath} alt={artAlt} class="art-banner" />
+  {/if}
   <article class="layout">
-    <div class="body prose">{@html bodyHtml}</div>
+    <div class="body prose">
+      {#if !artIsBanner && artPath}
+        <EntityImage path={artPath} alt={artAlt} class="art-portrait" />
+      {/if}
+      {@html bodyHtml}
+    </div>
 
     <div class="rail">
       {#if entity.statblock}
@@ -90,6 +121,24 @@
 {/if}
 
 <style>
+  /* Imagery v1 (DEDUCTION §4.3.1): global because the <img> lives inside
+     EntityImage. */
+  :global(.art-banner) {
+    display: block;
+    width: 100%;
+    max-height: 15rem;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  :global(.art-portrait) {
+    float: right;
+    width: min(16rem, 45%);
+    margin: 0 0 0.75rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+  }
   .hero {
     margin-bottom: 1rem;
   }

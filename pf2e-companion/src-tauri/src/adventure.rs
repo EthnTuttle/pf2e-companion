@@ -45,6 +45,13 @@ pub struct HandoutDef {
     pub visible_to: String,
     #[serde(default)]
     pub body: Option<String>,
+    /// Pack-relative art plate (imagery v1, DEDUCTION §4.2), e.g.
+    /// `art/adventures/widows-lamp/handout-letter.webp`. Additive.
+    #[serde(default)]
+    pub image: Option<String>,
+    /// Required whenever `image` is set (a11y gate — enforced in promote.py).
+    #[serde(default)]
+    pub image_alt: Option<String>,
 }
 
 /// An NPC sidecar reference (slug + parsed statblock JSON).
@@ -145,6 +152,8 @@ pub fn parse_adventure(
                     .and_then(|v| v.as_str().map(str::to_string))
                     .unwrap_or_else(|| "gm".into()),
                 body: pick("body").and_then(|v| v.as_str().map(str::to_string)),
+                image: pick("image").and_then(|v| v.as_str().map(str::to_string)),
+                image_alt: pick("image_alt").and_then(|v| v.as_str().map(str::to_string)),
             });
         }
     }
@@ -365,6 +374,8 @@ fn def_from_mapping(fm: &serde_yaml::Mapping, fallback_id: &str) -> Result<Adven
                     .and_then(|v| v.as_str().map(str::to_string))
                     .unwrap_or_else(|| "gm".into()),
                 body: pick("body").and_then(|v| v.as_str().map(str::to_string)),
+                image: pick("image").and_then(|v| v.as_str().map(str::to_string)),
+                image_alt: pick("image_alt").and_then(|v| v.as_str().map(str::to_string)),
             });
         }
     }
