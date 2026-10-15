@@ -468,14 +468,18 @@ Emit `session_ended` to both. Assert both pages render the drained post-session
 surface (badge sans snapshot, empty panels) — matching the reducer contract
 (`session.svelte.ts:27`). Shot: `gameflow/14-session-ended.png`.
 
-**S24 resume-gap (documented, xfail-style)** — `session_load` has an IPC
-wrapper (`ipc.ts:451`) but the lobby’s `handleLoad` is an unwired stub
-(`table/+page.svelte:108–121`: sets an error string, no session picker). The
-harness does **not** paper over this: S24 asserts the current truth — after
-S23, returning to `/table` shows host/join only, and `session_load` is never
-invoked from the UI. When a resume UI lands (future phase), this scenario is
-replaced by a real resume: `session_load` stub → SessionInfo → emit snapshot →
-play surface repopulated. No shot; assertion-only.
+**S24 resume-saved-session** — *the old "resume-gap (documented,
+xfail-style)" row is superseded (2026-10-15): the resume UI landed with the
+fork merge* (`table/+page.svelte` Saved Sessions panel — `refreshSaved` /
+`session_list_saved` / `session_load` / `session_export_log`), *exactly the
+trigger this row named for replacement*. The real resume flow: after S23's
+end-session state, return to `/table`; `session_list_saved` is re-stubbed
+mid-test (via `__PF2E_HARNESS_CONFIG__.responses`, the 12.0 mechanism) to ONE
+saved fixture session (`fixtures/session.ts` `fixtureSavedSession`,
+`ended: true`); assert the row description + ended badge; click Resume;
+assert the recorded `session_load` args `{campaignId, sessionId, name}`, the
+navigation to `/table/play`, and that a re-emitted snapshot repopulates the
+play surface. Shot: `gameflow/15-resumed-session.png`.
 
 ### Group F — resilience (`tests/e2e/resilience.spec.ts`)
 
@@ -948,6 +952,20 @@ new `e2e` job, before the next begins.
   run can't clobber stored prefs with blank defaults (12.2's S14 evidence).
   Re-verified after fixes: `pnpm check` 0/0, `pnpm test` 86/86, `pnpm e2e`
   27/27 (strict assertion passing), `e2e:live` 4/4.
+- **Post-merge S24 replacement landed** (2026-10-15): the fork merge brought
+  the REAL saved-sessions lobby (`refreshSaved`, `Saved Sessions` panel,
+  `session_list_saved` / `session_load` / `session_export_log` in
+  `src/lib/ipc.ts`), so S24's old xfail pin was replaced by the
+  `resume-saved-session` spec above per §4's own trigger. Harness deltas:
+  `fixtures/session.ts` gains `fixtureSavedSession` (additive);
+  `helpers/session.ts` gains `resumeViaLobby`; `BASE_RESPONSES` gains
+  `session_list_saved: { ok: [] }` because the lobby now refreshes the saved
+  list on every mount — without a base stub it would be an unstubbed-command
+  fixture bug, and the empty default keeps S13–S15/S27's "no saved panel"
+  assertions true. S13–S15 silently depending on an EMPTY list: none assert
+  on the panel at all; S14's post-return invite-absence pin (`.invite` count
+  0) is unaffected (invite state remains lobby-local) and stays.
+  `gameflow/15-resumed-session.png` captured.
 - **Post-12 backlog (not committed here):** runtime-injection probe against the
   production bundle (§2.2); visual baselines (`PF2E_VRT=1`, revisit per §5
   trigger); LLM token-stream scenario; nightly `e2e:live` workflow.

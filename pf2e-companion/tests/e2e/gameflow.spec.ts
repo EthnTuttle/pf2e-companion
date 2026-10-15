@@ -26,9 +26,11 @@
 //   from the unchanged snapshot). S22 emits the server-style initiative
 //   echo patch after each Add — the same loop a live server creates — which
 //   makes the second set_initiative cumulative, per §4's assertion.
-// - S24: no resume UI exists (handleLoad at table/+page.svelte:108–121 is
-//   wired to no markup); S24 pins that truth — host/join only, zero
-//   session_load invocations — and gets replaced when a resume UI lands.
+// - S24: the resume UI has LANDED (fork merge — Saved Sessions lobby panel,
+//   session_list_saved / session_load, handleResume at table/+page.svelte),
+//   so the old resume-gap pin was replaced by the real resume flow per §4's
+//   own supersede clause: saved-list stub → Resume click → exact
+//   session_load args → /table/play → re-emitted snapshot repopulates.
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import {
   emitPatch,
@@ -43,6 +45,7 @@ import {
   emitSnapshotFromGm,
   hostViaLobby,
   joinViaLobby,
+  resumeViaLobby,
 } from "./helpers/session";
 import {
   chatEntry,
@@ -54,6 +57,7 @@ import {
   fixturePlayerPeerId,
   fixturePlayersGmAndAlice,
   fixturePlayersGmOnly,
+  fixtureSavedSession,
   fixtureScene,
   fixtureSessionId,
   fixtureSessionInfoGm,
@@ -646,43 +650,99 @@ test("S23 end-session-teardown", async ({ browser }) => {
   }
 });
 
-// Xfail-style documentation of a deliberate gap — NOT a stub for future
-// behavior. session_load has an IPC wrapper (ipc.ts:451) but the lobby's
-// handleLoad (:108–121) just sets an error string and is referenced by NO
-// markup: there is no session picker, no resume affordance, and no element
-// capable of invoking session_load. S24 pins the current truth; when a
-// resume UI lands, replace this test with the real resume flow (session_load
-// stubbed → SessionInfo → emit snapshot → play surface repopulated).
-test("S24 resume-gap", async ({ browser }) => {
+// The real resume flow §4's old resume-gap row promised ("when a resume UI
+// lands, replace this test"). The fork merge landed it: the lobby's onMount
+// refreshSaved()→session_list_saved fills a Saved Sessions panel, each row's
+// Resume runs handleResume → session_load(campaign, session_id, name) →
+// SessionInfo → transport hookup → goto /table/play. S24 drives exactly
+// that, post-S23: the ended fixture session is the one listed.
+test("S24 resume-saved-session", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   try {
     await installHarness(page, {
       session_host: { ok: fixtureSessionInfoGm },
+      session_intent: { ok: null },
+      session_load: { ok: fixtureSessionInfoGm },
     });
-    // Narrative per §4: "after S23, returning to /table". Host and head back
-    // — the play page's onDestroy wipes session state on the way out, so
-    // this is also the true post-teardown lobby surface.
+    // Narrative per §4: "after S23's end-session state, return to /table".
+    // Host and head back — the play page's onDestroy wipes session state on
+    // the way out, so this is the true post-teardown lobby surface.
     await hostViaLobby(page, { name: fixtureGmName });
+
+    // The Rust side has since persisted the ended session: re-stub
+    // session_list_saved to surface it (same-page-flow re-stub via
+    // __PF2E_HARNESS_CONFIG__.responses — the PLAN §9 12.0 mechanism; the
+    // BASE stub keeps the list empty until now).
+    await page.evaluate((saved) => {
+      if (window.__PF2E_HARNESS_CONFIG__) {
+        window.__PF2E_HARNESS_CONFIG__.responses.session_list_saved = {
+          ok: [saved],
+        };
+      }
+    }, fixtureSavedSession);
+
+    // Return to the lobby the way a user goes (client-side tab-bar nav —
+    // the remount re-runs refreshSaved with the new stub).
     await page.locator('.tabbar a[href="/table"]').click();
 
+    // The Saved Sessions panel lists exactly the one ended fixture session,
+    // described exactly as describeSavedSession formats it (name —
+    // campaign • adventure • date-of-created_at).
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Saved Sessions" }),
+    ).toBeVisible();
+    const savedRow = page.locator(".saved-list li");
+    await expect(savedRow).toHaveCount(1);
+    await expect(savedRow.locator(".saved-desc")).toHaveText(
+      `${fixtureSessionName} — millbrook • widows-lamp • 2023-11-14`,
+    );
+    await expect(savedRow.locator(".badge-ended")).toHaveText("ended");
+    // Host/join panels still render alongside (S13–S15 surfaces unchanged).
     await expect(
       page.getByRole("heading", { level: 2, name: "Host a Session" }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { level: 2, name: "Join a Session" }),
     ).toBeVisible();
-    // Host/join only — no resume/load affordance of any kind.
+
+    // Resume: the round-trip auto-navigates to the play surface (the helper
+    // also awaits both listener registrations).
+    await resumeViaLobby(page, { name: fixtureGmName });
+
+    // session_load carried the exact identity triple the Rust authority
+    // expects — campaign id, session id, and the re-entered player name.
+    const loads = (await invocations(page)).filter(
+      (r) => r.cmd === "session_load",
+    );
+    expect(loads).toHaveLength(1);
+    expect(loads[0]?.args).toEqual({
+      campaignId: "millbrook",
+      sessionId: fixtureSessionId,
+      name: fixtureGmName,
+    });
+
+    // The authority re-emits the resumed session's snapshot (roster +
+    // adventure, per the saved fixture); the play surface repopulates.
+    await emitSnapshotFromGm(page, null, {
+      players: fixturePlayersGmOnly,
+      adventureSlug: "widows-lamp",
+    });
     await expect(
-      page.getByRole("button", { name: /resume|load/i }),
-    ).toHaveCount(0);
+      page.getByRole("heading", { level: 1, name: fixtureSessionName }),
+    ).toBeVisible();
+    await expect(page.locator(".badge.gm")).toHaveText("GM");
+    await expect(page.locator(".adventure-badge")).toHaveText(
+      "📖 widows-lamp",
+    );
+    await switchTab(page, "Party");
+    await expect(page.locator(".party-card")).toHaveCount(1);
     await expect(
-      page.getByRole("link", { name: /resume|load/i }),
-    ).toHaveCount(0);
-    // And session_load was never invoked anywhere in the round-trip.
-    expect(
-      (await invocations(page)).filter((r) => r.cmd === "session_load"),
-    ).toHaveLength(0);
+      page.locator(".party-card .card-header .name"),
+    ).toHaveText(fixtureGmName);
+
+    await switchTab(page, "Chat+Dice");
+    await shot(page, "gameflow/15-resumed-session");
   } finally {
     await context.close();
   }

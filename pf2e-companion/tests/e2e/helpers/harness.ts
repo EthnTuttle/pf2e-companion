@@ -23,13 +23,17 @@ export const LLM_OFF: LlmStatus = {
 /**
  * The baseline every route's boot needs (PLAN §3.3): the layout mounts
  * `list_lenses` + `list_campaigns`, the search page probes `schema_version`,
- * and LLM state defaults to off.
+ * and LLM state defaults to off. The /table lobby refreshes its Saved
+ * Sessions list on every mount (refreshSaved; the resume surface merged
+ * post-12.3), so `session_list_saved` defaults to EMPTY here — S13–S15/S27
+ * keep pinning "no saved panel" and only S24 overrides it.
  */
 export const BASE_RESPONSES: Record<string, Stub> = {
   list_lenses: { ok: [] },
   list_campaigns: { ok: [fixtureCampaign] },
   schema_version: { ok: 12 },
   llm_status: { ok: LLM_OFF },
+  session_list_saved: { ok: [] },
 };
 
 /**
