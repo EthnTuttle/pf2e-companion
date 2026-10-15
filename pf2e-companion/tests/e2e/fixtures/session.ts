@@ -8,6 +8,7 @@
 import type {
   ChatEntry,
   RollRecord,
+  SavedSessionSummary,
   SessionInfo,
   SessionSnapshot,
 } from "$lib/ipc";
@@ -43,6 +44,24 @@ export const fixtureSessionInfoPlayer: SessionInfo = {
   p2p_ticket: fixtureP2pTicket,
   name: fixtureSessionName,
   pin: fixtureSessionPin,
+};
+
+/**
+ * The single Saved Sessions row the lobby lists after S23's teardown
+ * persisted the fixture session (real resume surface from the merge; §9
+ * post-12.3 note): same session id / name / adventure as the live fixtures,
+ * `ended: true`, campaign id "millbrook" (same as fixtureCampaign). The
+ * `created_at` matches gmSnapshotBuilder's meta timestamp, so
+ * describeSavedSession renders "... • 2023-11-14" — S24 pins that string.
+ */
+export const fixtureSavedSession: SavedSessionSummary = {
+  session_id: fixtureSessionId,
+  campaign: "millbrook",
+  name: fixtureSessionName,
+  created_at: 1_700_000_000_000,
+  adventure_slug: "widows-lamp",
+  ended: true,
+  saved_at: 1_700_000_123_456,
 };
 
 type PlayerEntry = SessionSnapshot["players"][string];

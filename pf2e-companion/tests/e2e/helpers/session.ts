@@ -60,6 +60,26 @@ export async function joinViaLobby(
 }
 
 /**
+ * Resume a saved session from the lobby's Saved Sessions panel and land on
+ * /table/play. The caller must already be on /table with the intended saved
+ * session listed (session_list_saved stubbed to it); the identity name is
+ * re-filled so the Resume button's `!playerName.trim()` gate is satisfied
+ * even in a fresh context. Like the other lobby drivers, this only returns
+ * once the URL is the play surface AND both listeners are registered (the
+ * resume handler attaches them before goto, exactly like handleHost).
+ */
+export async function resumeViaLobby(
+  page: Page,
+  { name }: { name: string },
+): Promise<void> {
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByRole("button", { name: "Resume" }).click();
+  await expect(page).toHaveURL(/\/table\/play$/);
+  await waitForListener(page, "session:patch");
+  await waitForListener(page, "session:presence");
+}
+
+/**
  * Build ONE snapshot and deliver it as a "session:patch" to the GM page and
  * (when given) the player page — one builder call, so both contexts receive
  * byte-identical authority state. waitForListener polls precede each emit;
