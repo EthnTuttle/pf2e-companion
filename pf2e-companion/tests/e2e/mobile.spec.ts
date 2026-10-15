@@ -12,6 +12,9 @@
 // never by name. (The bottom app tab-bar keeps its labels, but is addressed
 // by href anyway.)
 //
+// Stop 3 additionally pins the F1 fix (ui-review 2026-10-14): the chat
+// composer's box must not reach the tab-bar's box at 390px.
+//
 // §4→reality adaptation (same seam as S14; PLAN §9 12.2 note): the lobby's
 // post-host invite panel (PIN/LAN/ticket verbatim) is unreachable — invite
 // strings live in lobby-local state wiped by navigation. Stop 2 drives the
@@ -140,6 +143,22 @@ test("S27 mobile-pass", async ({ page }) => {
   await expect(page.locator(".chat-log p.empty")).toContainText(
     "No messages yet",
   );
+  // F1 (ui-review 2026-10-14): the chat composer must sit fully above the
+  // fixed bottom tab-bar at 390px — its bottom edge must not reach the
+  // tab-bar's top edge (1px tolerance). Regression guard for .play-surface's
+  // old `height: 100vh`, which parked the composer behind/below the tabbar
+  // at scroll 0 (composer top 876px vs 844px viewport, mobile).
+  {
+    const composerBox = await page.locator(".chat-input-row").boundingBox();
+    const tabbarBox = await page.locator("nav.tabbar").boundingBox();
+    if (!composerBox) throw new Error("stop 3 play: composer not laid out");
+    if (!tabbarBox) throw new Error("stop 3 play: tab-bar not laid out");
+    expect(
+      composerBox.y + composerBox.height,
+      `stop 3 play: composer bottom (${composerBox.y + composerBox.height}) ` +
+        `above tab-bar top (${tabbarBox.y}) — F1 overlap`,
+    ).toBeLessThanOrEqual(tabbarBox.y + 1);
+  }
   // Party is the third tab (chat, initiative, party, scene, handouts).
   await playTabs.nth(2).click();
   await expect(playTabs.nth(2)).toHaveAttribute("aria-selected", "true");

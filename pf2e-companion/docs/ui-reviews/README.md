@@ -102,6 +102,7 @@ The screenshots do **not** prove the following; they are stubbed or require manu
 - **Real WebKit/WebView2 rendering**: Shots use Chromium; cross-engine drift is accepted (see plan §5).
 - **Real LLM backend behavior**: The chat-reply variant replays fixed token events through the real `llm:token` listen path, but the LLM backend is canned (labeled `stubbed-backend`).
 - **Wizard restart card + vault-move semantics**: The `wizard_complete` fixture stubs `restart_required: false`; no actual restart occurs.
+- **Fixed bottom tabbar overlapping mid-image content on tall routes**: `fullPage: true` captures paint fixed elements at their scroll-0 viewport coordinates, so on routes taller than one viewport the tabbar appears mid-image over live content even though real viewports clear it (main's 5rem bottom padding). Verify overlap claims at a real viewport before filing — see `2026-10-15-f1-fix.md` § harness note for measurements.
 
 ## Reviewer Subagent Prompt Template
 
