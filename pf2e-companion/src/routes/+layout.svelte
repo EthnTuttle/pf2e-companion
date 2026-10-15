@@ -36,7 +36,7 @@
   ];
 </script>
 
-<div class="app">
+<div class="app" class:fullbleed={page.url.pathname.startsWith("/table/play")}>
   <header class="topbar">
     <a class="brand" href="/" aria-label="Home">pf2e-companion</a>
     <div class="pickers">
@@ -108,6 +108,24 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+  }
+  /* F1 fix (ui-review 2026-10-14): on /table/play the surface app-shells into
+     the chrome-free portion of the viewport. Pinning .app to the (dynamic)
+     viewport height lets the play surface size itself as 100% of main's
+     content box — i.e. excluding the sticky topbar, main's padding (incl. its
+     5rem bottom clearance), and the fixed tabbar. A bare `height: 100vh` on
+     .play-surface ignored all of that and parked the chat composer
+     under/behind the tabbar at scroll 0. Diagnosis: tabbar measured 52.17px
+     tall at 390px and 1280px; main's 5rem (80px) bottom padding already
+     clears it on every normal-flow route at max scroll (27.6px of slack) —
+     only play's 100vh surface bypassed the padding. */
+  .app.fullbleed {
+    min-height: 0;
+    height: 100vh; /* fallback for engines without dvh */
+    height: 100dvh;
+  }
+  .app.fullbleed main {
+    min-height: 0;
   }
 
   .topbar {

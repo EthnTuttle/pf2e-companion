@@ -848,7 +848,14 @@
   .play-surface {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    /* F1 fix (ui-review 2026-10-14): fill main's content box — on this route
+       +layout.svelte pins .app.fullbleed to the (dynamic) viewport height, so
+       100% here already excludes the topbar, main padding, and the fixed
+       tabbar. The old `height: 100vh` bypassed main's 5rem bottom clearance
+       and parked the chat composer behind/below the tabbar at scroll 0
+       (composer top 876px vs 844px viewport at 390px). */
+    height: 100%;
+    min-height: 0;
     overflow: hidden;
   }
 
