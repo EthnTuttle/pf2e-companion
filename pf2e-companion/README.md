@@ -6,6 +6,32 @@ Cross-platform PF2e Remaster + Christian Biblical worldview reference & worldbui
 > Shipping roadmap to a broadly-playable release: `docs/SHIPPING.md`.
 > Plan: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2e-biblical-reference-2026-05-25.md`.
 
+## Install
+
+Friends-beta installers are attached to each GitHub Release (tags `v*` build
+them via `.github/workflows/release.yml`). They are **unsigned** — your OS
+will warn on first launch; that's expected, the clicks below get past it.
+
+- **Windows** — download the `.msi` and run it. SmartScreen shows "Windows
+  protected your PC": click **More info → Run anyway** (the app has no
+  code-signing certificate yet; that's Tier 2).
+- **macOS** — download the `.dmg`, drag the app to Applications. First launch:
+  **right-click (or Control-click) the app → Open → Open** in the Gatekeeper
+  dialog. Double-clicking alone just says "unidentified developer".
+  (Apple-silicon build; Intel Macs aren't bundled in the beta.)
+- **Linux (deb)** — `sudo apt install ./pf2e-companion_*.deb` from the
+  download directory (pulls the WebKitGTK runtime as a dependency).
+- **Linux (AppImage)** — `chmod +x pf2e-companion_*.AppImage`, then run it
+  directly. If your distro lacks FUSE, run it once as
+  `./pf2e-companion_*.AppImage --appimage-extract-and-run`.
+
+No account, no telemetry. Your data lives in a local vault folder you pick on
+first launch.
+
+> Maintainer note: Linux bundles were produced and verified locally (deb /
+> AppImage, plus rpm from the default target set) at
+> `src-tauri/target/release/bundle/` — cutting a release = `git tag v*` push.
+
 ## What works
 
 ### Tier 1 — first-run wizard (done)
