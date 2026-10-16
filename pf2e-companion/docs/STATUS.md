@@ -1,72 +1,71 @@
-# Handoff status — 2026-10-14 (friends-beta push, agent-orchestrated)
+# Handoff status — 2026-10-15 (friends-beta integration + ship cut)
 
-Branch `main`, all work committed. This file is the running "where we are" for
-whichever machine picks up next; `docs/SHIPPING.md` remains the roadmap.
+Branch **`master` is canonical** (`main` is frozen at `fbdd268`, fully contained
+in master via the reconciliation merge — kept for history, do not branch from it).
+This file is the running "where we are" for whichever machine picks up next;
+`docs/SHIPPING.md` remains the roadmap. **Today 08:00 EDT both machines should
+converge on master.**
 
-## Landed this session (7 commits)
+## Where this came from
 
-- `cd01af4` docs: nostr analysis (`docs/research/nostr-integration-analysis.md` —
-  verdict: **no nostr in core**; only Tier-3-conditional signed pack announcements;
-  **no zaps in-app**, Apple 3.1.1 + out-of-scope list + audience fit) + LN-tip
-  funding: `.github/FUNDING.yml` → `average@minibits.cash`, README Support section.
-- `02acd14` phase 12: session log export — markdown transcript (GM drawer pre-end
-  + lobby saved-sessions Resume/Export post-end), `tauri-plugin-dialog` save-as
-  (platform-scoped: linux=xdg-portal, others upstream defaults — review catch),
-  vault watcher skips `sessions/` artifacts.
-- `7ebac15` phase 13: diagnostics — 2,000-line ring + per-session `.log` twin
-  (host-only, append-across-resume), `diagnostics_get` IPC, **new `/settings`
-  index page** with Copy-diagnostics (no telemetry). Peer=ring-only.
-- `853a123` phase 14: first-run wizard — `/onboarding` 3 screens (vault / lens /
-  compact LLM), configurable vault root via hand-rolled atomic `settings.json`
-  (no new deps; restart on vault change; existing installs auto-skip),
-  lens persists to localStorage.
-- `3a8dfde` docs: UI-shots plan.
-- `28844eb` phase 15: UI screenshot harness — `pnpm e2e:shots` boots the real app
-  in headless Chromium (init-script `__TAURI_INTERNALS__` stub + typed fixtures;
-  wizard stubs default to completed; chat-reply replay labeled stubbed-backend),
-  writes 80 PNGs (20 routes × desktop/mobile × light/dark) to gitignored `shots/`
-  + `manifest.json`. Not in CI/default gates.
-- `51f1ebd` docs: first visual review (`docs/ui-reviews/2026-10-14-first-pass.md`).
+Two sessions diverged at `c5ae8a0` (SHIPPING.md): this machine built the Phase 12
+E2E harness + imagery v1; the other machine built Tier-1 phases 12–15 (session
+log export, diagnostics hub, first-run wizard, UI-shots harness). Orchestrated
+merge landed everything:
 
-Gates at handoff: 194 cargo (default + `--all-features`) / 112 vitest /
-`pnpm check` 0-err (1 known pre-existing tsconfig @types/node warning) /
-`pnpm build` / `pnpm e2e:shots` exit 0.
+- `81a5a20` fork reconciliation merge (4 conflicts resolved by hand; lockfiles
+  regenerated; `e2e/node-shims.d.ts` widened to reconcile both harnesses)
+- S24 upgraded to a **real resume-saved-session** scenario (lobby's saved
+  sessions panel was the old xfail pin's replacement case)
+- `b27af5e` installers — local `pnpm tauri build` proven (deb 18.4 MiB /
+  AppImage 92.8 MiB / rpm) + `v*`-tag `release.yml` (win msi / mac dmg /
+  linux deb+appimage → GitHub Release assets). Fixed a red `tauri build`:
+  npm `@tauri-apps/plugin-dialog` 2.8.2 vs cargo 2.7.3 skew — aligned to
+  cargo 2.8.3 / npm api ^2.12.3 (specifier is the drift guard)
+- `426a1ed` F1 tabbar fix — play-surface `100vh` ignored chrome; now `100%`
+  inside a `100dvh` route-scoped shell; S27 stop 3 asserts composer clears
+  the tabbar; shots matrix (80 PNGs) regenerated clean
+- `0745e2f` deep-links — `pf2e://join?url=…(&pin=)` scheme, lobby prefill +
+  history scrub, Copy-invite-link in the invite panel, 19 parse/build unit
+  tests; rust-ini pinned 0.21.1 (0.21.3 breaks tauri-plugin-deep-link 2.6.2's
+  compile — E0063)
 
-## NEXT: what to pick up
+## Final certification battery on the merged tree (solo, no sibling worktrees)
 
-1. **F1 fix slice (recommended next)** — from the UI review: the fixed bottom
-   tab bar overlaps scroll content and, on `/table/play`, the chat composer
-   (mobile worst: composer half-hidden behind tabs). Then regenerate shots and
-   confirm in a second review pass. Good first-cycle on a fresh machine.
-2. **Real-device evening** (SHIPPING Tier 1 #1, human) — full session host →
-   PIN-join → roll → handout → end/resume on real hardware. Pair with
-   **deep-links** (item 2) since it needs the same device session, and run
-   `PF2E_GUI_SMOKE=1 cargo test --test phase11_gui` once here if the machine
-   has xvfb (this sandbox lacks `xvfb-run`; phase-14 startup order changed
-   since it last ran).
-3. Remaining Tier 1: installer config (#3, needs a cut build), first-run value
-   proven once device evening happens.
+- `cargo test --all-features` — 24 suites, 0 failures
+- `corepack pnpm check` — 0 errors / 0 warnings
+- `corepack pnpm test` — 131/131 (112 + 19 deeplink)
+- `corepack pnpm build` — ✓
+- `corepack pnpm e2e` — 27/27 (deterministic lane)
+- `PF2E_E2E_LAN=1 corepack pnpm e2e:live` — 4/4
 
-## Agent pipeline conventions (so the next session reproduces it)
+## Release cut
 
-- Roles: **plan** `tff/glm-5.3#high` → **implement** `tff/glm-5.3#medium` (or
-  `tff/nemotron-3-super#medium`) → **review** `tff/nemotron-3-ultra#high`.
-- Orchestrator trust-but-verifies every implementer against `git status` + the
-  four gates before spawning the reviewer. Reviewers caught real regressions
-  (dialog backend strip) — keep them in the loop.
-- Known-bad models on this host today: `deepseek-v4.1-flash` (DSML tool-call
-  leak), `glm-5.3-flash` (silent zero-work / truncation). tff provider flapped
-  twice (Hosted_vllmException 500s); background long commands survive restarts.
-- Every slice gets a plan in `docs/plans/`; UI feedback lands in
-  `docs/ui-reviews/<date>-<scope>.md` (`docs/ui-reviews/README.md` has the
-  reviewer prompt template).
+Tag `v0.1.0` pushed to the fork fires `.github/workflows/release.yml` →
+Release with deb/AppImage/msi/dmg assets. Unsigned: friends need the
+first-launch bypass clicks documented in README → Install.
 
-## Sandbox quirks (this machine)
+## Next up (unchanged): Tier 1 item 1 — real-device evening
 
-- `pnpm` lives at `~/.nvm/versions/node/v24.12.0/bin` (nvm; not on default PATH).
-- All cargo invocations need `PKG_CONFIG_PATH=/tmp/opencode/gtk-shim/pkgconfig`
-  (no GTK dev packages; shim is .pc files over system runtime libs).
-- Playwright chromium cached at `~/.cache/ms-playwright/`; fresh machines need
-  `pnpm exec playwright install chromium` once.
-- Env-gated suites stay OFF by default: `PF2E_NET_TESTS`, `PF2E_NET_WAN`,
-  `PF2E_GUI_SMOKE`.
+The only remaining Tier 1 item, human-only: Android sim + real phone browser
+on live LAN + P2P join + avatars/lens/camera + **deep-link tap-through on a
+real device** (the `pf2e://` event path is not e2e-coverable; unit tests only).
+Open with the checklist in `docs/SHIPPING.md` and `docs/ui-reviews/README.md`.
+
+## Sandbox quirks ledger
+
+- **Port 4173 contention**: sibling worktrees each spawn the Vite preview on
+  4173; a second `pnpm e2e` run *attaches to the foreign server* (foreign code,
+  missing harness → false failures like "Cannot read properties of undefined
+  (invocations)"). Before trusting any e2e/live result: `ss -ltn | grep 4173`
+  must be empty. Failure of this kind during today's verification was
+  environmental, not code.
+- **Cold worktree Rust**: a fresh worktree's first `e2e:live` dies in
+  `beforeEach` compiling `e2e_host` — prime with `cargo run --example
+  e2e_host` once, then the lane is green.
+- Provider flaps killed two subagent sessions mid-flight ("Team doesn't
+  exist", terminal-yield). Both times the work was recoverable: one resumed
+  via a retry dispatch, one had already committed green (verify the commit's
+  claimed gates before trusting, then proceed).
+- `APPIMAGE_EXTRACT_AND_RUN=1` needed for `tauri build` in this machine's env
+  (full env note in `docs/plans/PLAN-TIER1-installers.md`).
