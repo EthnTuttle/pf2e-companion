@@ -5,6 +5,8 @@
   import { ensureLensesLoaded, lensState } from "$lib/lens.svelte";
   import { campaignState, refreshCampaigns } from "$lib/campaign.svelte";
   import { shouldRedirectToWizard, fetchWizardNeeded } from "$lib/wizard.svelte";
+  import { initDeepLinkHandling, inviteToLobbyQuery } from "$lib/deeplink";
+  import { sessionState } from "$lib/session.svelte";
 
   let { children } = $props();
 
@@ -19,9 +21,23 @@
 
   onMount(async () => {
     await Promise.all([ensureLensesLoaded(), refreshCampaigns()]);
+    // Invite deep-links (Tier 1 item 2): `pf2e://join?…` cold-start
+    // (getCurrent) and hot links (onOpenUrl) both land here; navigate to the
+    // lobby carrying the join params. A cold-start invite beats the wizard
+    // redirect — joining a friend's table is why the app just opened.
+    const fromInvite = await initDeepLinkHandling((invite) => {
+      // Mid-table guard: navigating to the lobby tears down the live
+      // session (play page onDestroy), so hot links during a table are
+      // ignored rather than yanking the user out.
+      if (sessionState.connected) return;
+      goto(`/table?${inviteToLobbyQuery(invite)}`);
+    });
     // First-run wizard: runs once per app load. fetchWizardNeeded swallows
     // IPC failure (browser/LAN clients) — they stay on `/`.
-    if (shouldRedirectToWizard(page.url.pathname, await fetchWizardNeeded())) {
+    if (
+      !fromInvite &&
+      shouldRedirectToWizard(page.url.pathname, await fetchWizardNeeded())
+    ) {
       goto("/onboarding");
     }
   });

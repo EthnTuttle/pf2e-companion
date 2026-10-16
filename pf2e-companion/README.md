@@ -271,8 +271,8 @@ Full spec: `~/wiki/topics/pf2e-worldbuilding-tool/output/plan-cross-platform-pf2
 
 0. **First run**: the `/onboarding` wizard sets your vault folder, lens, and (optionally) an LLM provider. Skip it and sane defaults apply — it never shows again.
 1. **Host**: Open `/table` in the Tauri app. Enter your name, pick a color, choose a campaign (create one in `/vault` if needed), optionally pick "The Widow's Lamp" adventure, click **Host Session**.
-2. **Share**: The lobby shows a **P2P Ticket** (desktop peers), a **LAN URL** (mobile), and a **Table PIN** (6 chars, required for LAN joins). Copy and send the appropriate invite.
-3. **Join**: Desktop peers paste the ticket on `/table` → **Join Session**. Mobile users open the LAN URL (e.g., `ws://192.168.1.42:4780/abc123?pin=ABC123`) in browser or Tauri Android/iOS app.
+2. **Share**: The lobby shows a **P2P Ticket** (desktop peers), a **LAN URL** (mobile), and a **Table PIN** (6 chars, required for LAN joins). Copy and send the appropriate invite — or use **Copy invite link** for a one-tap `pf2e://join?…` link (text it; the app opens with the join form prefilled, PIN included).
+3. **Join**: Desktop peers paste the ticket on `/table` → **Join Session**. Mobile users open the LAN URL (e.g., `ws://192.168.1.42:4780/abc123?pin=ABC123`) in browser or Tauri Android/iOS app — or just tap the `pf2e://join` invite link and confirm.
 4. **Enter Table**: Host clicks **Enter Table** → `/table/play`. Players arrive at the same play surface (6 tabs).
 5. **Load Adventure**: GM opens **GM** tab → **Load Widow's Lamp** (or **The Roof of Mercy**). Adventure loads: scenes, handouts, NPCs, tokens.
 6. **First Roll**: In **Chat+Dice** tab, type `/roll 1d20+7` → Enter. Result appears with per-die breakdown.
@@ -329,6 +329,14 @@ Real-time shared tabletop for PF2e. Desktop hosts via Tauri IPC; mobile clients 
 ### Join (Mobile / Second Desktop)
 - **P2P (desktop)**: Paste the ticket into the "P2P Ticket" field on `/table`, enter your name, click **Join Session**.
 - **LAN (mobile)**: Open the LAN URL (e.g., `ws://192.168.1.42:4780/abc123`) in the mobile browser or Tauri Android/iOS app. The `?host=` query param is auto-handled. **LAN sessions are PIN-protected** — the host lobby displays a 6-character Table PIN next to the LAN URL; joiners must enter it.
+
+### Invite links (Tier 1 item 2)
+
+"Text your friend a link" replaces dictating host:port + PIN. The lobby's Invite Players panel carries **Copy invite link**, producing `pf2e://join?url=<lan-url>&pin=<pin>`. Tapping it on a machine with the app installed opens the lobby prefilled (LAN URL + PIN fields populated, name still typed, **Join Session** still user-confirmed). A `pf2e://join?ticket=…` variant exists for desktop-desktop P2P invites.
+
+- Scheme registration comes from `tauri.conf.json` (`plugins.deep-link`): desktop schemes, the Android intent filter, and iOS `CFBundleURLTypes` are all generated from that config by `tauri-plugin-deep-link`. On Linux and Windows-debug the app also re-registers at runtime (AppImage/`tauri dev` parity).
+- PIN posture: the phase-10 "no `?pin=` in URLs" rule was about browser history; a custom-scheme link opens the app directly, never a browser history. The LAN/mobile-browser path keeps the PIN typed by hand.
+- Desktop note: on Windows/Linux a clicked link while the app is already running opens a second instance (the URL arrives via CLI args at startup — handled the same as cold start). Single-instance preference is a possible follow-up, not shipped.
 
 ### Feature flags (Rust, `src-tauri/Cargo.toml`)
 - `lan` (default ON) — WebSocket bridge on port 4780 (`tokio-tungstenite`).
