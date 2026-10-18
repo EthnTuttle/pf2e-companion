@@ -96,16 +96,155 @@ pub async fn serve(listener: TcpListener, svc: Arc<SessionService>) -> Result<()
 }
 
 /// `ws://<lan-ip>:<port>/<session_id>` — the URL advertised to thin
-/// clients. The LAN IP is discovered with a no-packet UDP `connect`.
+/// clients (lobby display, copy-invite, deep links all read this one
+/// value; nothing frontend-side reassembles it). F-R2: the address comes
+/// from ranked interface enumeration (`pick_lan_ipv4`); the historical
+/// 8.8.8.8 UDP probe survives only as last-resort fallback.
 pub fn advertised_addr(port: u16, session_id: &str) -> Result<String> {
-    let ip = local_lan_ip().unwrap_or_else(|| "127.0.0.1".to_string());
+    let ip = advertised_ip(enumerate_candidates(), legacy_udp_probe);
     Ok(format!("ws://{ip}:{port}/{session_id}"))
 }
 
-fn local_lan_ip() -> Option<String> {
+/// One IPv4 address on one interface, reduced to what advertisement
+/// ranking needs. Synthesizable in unit tests — ranking never touches
+/// the OS interface list itself. IPv6 is out of scope by construction:
+/// LAN play advertises a v4 `ws://` URL (CONTRACT § 4.3) and home Wi-Fi
+/// is dual-stack; a v6-only host enumerates zero candidates and degrades
+/// to the probe/`127.0.0.1` path with a warning — never a crash.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LanCandidate {
+    /// OS interface name (`wlp2s0`, `en0`, `wg0-mullvad`, …). Tunnel
+    /// filtering by name is a heuristic: names are per-OS conventions.
+    pub name: String,
+    pub ip: std::net::Ipv4Addr,
+    pub prefixlen: u8,
+    pub is_up: bool,
+}
+
+/// Snapshot the machine's IPv4 interface addresses. An empty vec (with a
+/// warning) when enumeration itself fails — the caller then falls back
+/// to the legacy probe, so behavior can only improve, never regress.
+fn enumerate_candidates() -> Vec<LanCandidate> {
+    match if_addrs::get_if_addrs() {
+        Ok(ifaces) => ifaces
+            .iter()
+            .filter_map(|iface| match &iface.addr {
+                if_addrs::IfAddr::V4(v4) => Some(LanCandidate {
+                    name: iface.name.clone(),
+                    ip: v4.ip,
+                    prefixlen: v4.prefixlen,
+                    is_up: iface.is_oper_up(),
+                }),
+                if_addrs::IfAddr::V6(_) => None,
+            })
+            .collect(),
+        Err(e) => {
+            tracing::warn!(error = %e, "interface enumeration failed; using legacy UDP probe");
+            Vec::new()
+        }
+    }
+}
+
+/// Tunnel/virtual interface name prefixes, matched case-insensitively.
+/// Heuristic only — interface naming is a per-OS convention, so the
+/// RFC1918 preference order in `rank_class` is the second line of
+/// defense when a tunnel dodges the filter (e.g. a non-/32 10/8 VPN).
+const TUNNEL_NAME_PREFIXES: &[&str] = &[
+    "tun", "tap", "wg", "utun", "gif", "stf", "ipsec", "ppp", "vpn",
+    "tailscale", "ts-", "zt", "nebula", "outline",
+    "docker", "veth", "br-", "virbr", "podman", "cni", "flannel",
+];
+
+fn is_tunnel_name(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    TUNNEL_NAME_PREFIXES.iter().any(|p| n.starts_with(p))
+}
+
+/// 100.64.0.0/10 — carrier-grade NAT (Tailscale tailnet addrs, cellular
+/// uplinks). Never the network a phone on Wi-Fi sits on.
+fn is_cgnat(ip: std::net::Ipv4Addr) -> bool {
+    let o = ip.octets();
+    o[0] == 100 && (o[1] & 0xC0) == 64
+}
+
+/// Lower is better. Home Wi-Fi is overwhelmingly 192.168/16; VPN
+/// tunnels that slip the name filter are overwhelmingly 10/8 or CGNAT —
+/// so private classes rank in that order, and any RFC1918 beats a public
+/// address (phones can't dial the host's WAN IP through NAT anyway).
+fn rank_class(ip: std::net::Ipv4Addr) -> u8 {
+    let o = ip.octets();
+    if o[0] == 192 && o[1] == 168 {
+        0
+    } else if o[0] == 172 && (16..32).contains(&o[1]) {
+        1
+    } else if o[0] == 10 {
+        2
+    } else {
+        3
+    }
+}
+
+/// Pure ranking: the address a phone on the same LAN can reach, or None
+/// when nothing qualifies (caller's cue to fall back to the probe).
+/// Excludes: down interfaces, /32 host routes (the Mullvad F-R2 shape),
+/// loopback, link-local 169.254/16, CGNAT 100.64/10, unspecified,
+/// multicast/experimental, and tunnel-named interfaces. Deterministic:
+/// class rank, then interface name, then address.
+pub(crate) fn pick_lan_ipv4(candidates: &[LanCandidate]) -> Option<std::net::Ipv4Addr> {
+    let mut usable: Vec<&LanCandidate> = candidates
+        .iter()
+        .filter(|c| c.is_up)
+        .filter(|c| (1..32).contains(&c.prefixlen))
+        .filter(|c| {
+            let ip = c.ip;
+            !ip.is_loopback()
+                && !ip.is_link_local()
+                && !ip.is_unspecified()
+                && !ip.is_broadcast()
+                && !ip.is_multicast()
+                && ip.octets()[0] < 240
+                && !is_cgnat(ip)
+        })
+        .filter(|c| !is_tunnel_name(&c.name))
+        .collect();
+    usable.sort_by(|a, b| {
+        rank_class(a.ip)
+            .cmp(&rank_class(b.ip))
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.ip.cmp(&b.ip))
+    });
+    usable.first().map(|c| c.ip)
+}
+
+/// Resolve the advertised IP: ranked enumeration first, legacy probe as
+/// fallback (with a warning, since on a VPN'd host the probe can still
+/// return the tunnel address), `127.0.0.1` as the historical last resort.
+fn advertised_ip(
+    candidates: Vec<LanCandidate>,
+    legacy_probe: impl FnOnce() -> Option<std::net::Ipv4Addr>,
+) -> std::net::Ipv4Addr {
+    if let Some(ip) = pick_lan_ipv4(&candidates) {
+        return ip;
+    }
+    tracing::warn!(
+        "no viable LAN interface found (VPN tunnels and down/link-local \
+         interfaces are excluded); falling back to the 8.8.8.8 UDP probe — \
+         on a VPN'd host the advertised address may still be unreachable"
+    );
+    legacy_probe().unwrap_or(std::net::Ipv4Addr::LOCALHOST)
+}
+
+/// Pre-F-R2 behavior, kept verbatim for the fallback path: a no-packet
+/// UDP `connect` to a public address, then read back the chosen source.
+/// It follows the host's policy routing — on a VPN'd host that is the
+/// tunnel address (the F-R2 bug), which is why it is only a fallback.
+fn legacy_udp_probe() -> Option<std::net::Ipv4Addr> {
     let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
     sock.connect("8.8.8.8:80").ok()?;
-    Some(sock.local_addr().ok()?.ip().to_string())
+    match sock.local_addr().ok()?.ip() {
+        std::net::IpAddr::V4(ip) => Some(ip),
+        std::net::IpAddr::V6(_) => None,
+    }
 }
 
 type WsSink = SplitSink<WebSocketStream<TcpStream>, Message>;
@@ -328,4 +467,116 @@ async fn handle_socket(
     let _ = svc.peer_left(&peer_id);
     let _ = sink.close().await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::Ipv4Addr;
+
+    fn cand(name: &str, ip: &str, prefixlen: u8, is_up: bool) -> LanCandidate {
+        LanCandidate {
+            name: name.to_string(),
+            ip: ip.parse().unwrap(),
+            prefixlen,
+            is_up,
+        }
+    }
+
+    // (a) The F-R2 shape itself: real Wi-Fi next to a Mullvad-style
+    // tunnel /32 on 10/8. Wi-Fi must win even though 10/8 is RFC1918.
+    #[test]
+    fn wifi_beats_tunnel_slash32() {
+        let cands = vec![
+            cand("wg0-mullvad", "10.146.185.179", 32, true),
+            cand("wlp2s0", "192.168.1.172", 24, true),
+        ];
+        assert_eq!(pick_lan_ipv4(&cands), Some(Ipv4Addr::new(192, 168, 1, 172)));
+    }
+
+    // A tunnel with a *non*-/32 RFC1918 subnet is still excluded by the
+    // (case-insensitive) name heuristic; the 192.168 preference is the
+    // second line of defense if it dodges both.
+    #[test]
+    fn tunnel_names_excluded_case_insensitive() {
+        let cands = vec![
+            cand("WG0", "10.8.0.1", 24, true),
+            cand("Tailscale0", "192.168.50.5", 24, true),
+            cand("UTUN9", "172.16.3.2", 24, true),
+            cand("enp3s0", "192.168.1.10", 24, true),
+        ];
+        assert_eq!(pick_lan_ipv4(&cands), Some(Ipv4Addr::new(192, 168, 1, 10)));
+    }
+
+    // (b) Only a tunnel exists → ranking yields nothing and the legacy
+    // probe is used (warning is logged by `advertised_ip`). Probe
+    // failure degrades to loopback, the historical last resort.
+    #[test]
+    fn tunnel_only_falls_back_to_probe() {
+        let cands = vec![cand("tun0", "10.64.0.2", 32, true)];
+        assert_eq!(pick_lan_ipv4(&cands), None);
+        assert_eq!(
+            advertised_ip(cands.clone(), || Some(Ipv4Addr::new(192, 168, 1, 99))),
+            Ipv4Addr::new(192, 168, 1, 99)
+        );
+        assert_eq!(advertised_ip(cands, || None), Ipv4Addr::LOCALHOST);
+    }
+
+    // (c) Link-local 169.254/16 never gets advertised — it only appears
+    // when DHCP failed, so a phone could never reach it meaningfully.
+    #[test]
+    fn link_local_excluded() {
+        let only_ll = vec![cand("en0", "169.254.10.10", 16, true)];
+        assert_eq!(pick_lan_ipv4(&only_ll), None);
+        let with_wifi = vec![
+            cand("en0", "169.254.10.10", 16, true),
+            cand("en1", "192.168.1.20", 24, true),
+        ];
+        assert_eq!(pick_lan_ipv4(&with_wifi), Some(Ipv4Addr::new(192, 168, 1, 20)));
+    }
+
+    // (d) IPv6-only host: enumeration records no v4 candidates at all
+    // (V6 addrs are dropped in `enumerate_candidates`), so this is an
+    // empty list → no ranked pick → probe → and the v4-only probe fails
+    // on a v6-only host too, yielding loopback with warnings. No crash,
+    // no v6 literal in a `ws://` URL. Supporting LAN play over IPv6 is
+    // out of scope; see plan doc § non-goals.
+    #[test]
+    fn ipv6_only_degrades_to_loopback_via_probe() {
+        let no_v4: Vec<LanCandidate> = Vec::new();
+        assert_eq!(pick_lan_ipv4(&no_v4), None);
+        assert_eq!(advertised_ip(no_v4, || None), Ipv4Addr::LOCALHOST);
+    }
+
+    // Down interfaces (e.g. unplugged dock ethernet still holding its
+    // lease) must not win over the live one.
+    #[test]
+    fn down_interface_excluded() {
+        let cands = vec![
+            cand("enp0s31f6", "192.168.1.5", 24, false),
+            cand("wlp2s0", "192.168.1.172", 24, true),
+        ];
+        assert_eq!(pick_lan_ipv4(&cands), Some(Ipv4Addr::new(192, 168, 1, 172)));
+        assert_eq!(pick_lan_ipv4(&cands[..1]), None);
+    }
+
+    // CGNAT (Tailscale tailnet 100.x, cellular) is excluded; when both
+    // ethernet and Wi-Fi offer RFC1918, the 192.168/16 home class wins,
+    // then 172.16/12, then 10/8.
+    #[test]
+    fn private_class_ordering_and_cgnat() {
+        let cands = vec![
+            cand("tailscale0", "100.64.1.1", 32, true),
+            cand("corp-eth", "10.20.30.40", 16, true),
+            cand("vmnet8", "172.16.99.1", 24, true),
+            cand("wlp2s0", "192.168.8.2", 24, true),
+        ];
+        assert_eq!(pick_lan_ipv4(&cands), Some(Ipv4Addr::new(192, 168, 8, 2)));
+        assert_eq!(
+            pick_lan_ipv4(&cands[..3]),
+            Some(Ipv4Addr::new(172, 16, 99, 1))
+        );
+        assert_eq!(pick_lan_ipv4(&cands[1..2]), Some(Ipv4Addr::new(10, 20, 30, 40)));
+        assert_eq!(pick_lan_ipv4(&cands[..1]), None);
+    }
 }
