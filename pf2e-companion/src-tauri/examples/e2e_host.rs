@@ -16,6 +16,13 @@
 //! (tests/e2e/server/liveHost.ts) can synchronize on effects instead of
 //! sleeping.
 //!
+//! F-R7: a broadcast tap additionally mirrors EVERY service broadcast patch
+//! (peer-applied ones included — the stdin loop above only prints its own
+//! applies) as `{"type":"bcast","event":{…}}`. Additive: the `patch` /
+//! `applied` line protocol is untouched and the Playwright driver ignores
+//! `bcast` lines unless a test explicitly awaits one (L6 pins peer→GM chat
+//! arriving at the real authority this way).
+//!
 //! The adventure resolver serves the bundled-TEST fixture
 //! (tests/fixtures/adventure/widows-lamp.md, parsed on boot) so L4's
 //! `load_adventure("widows-lamp")` is deterministic and independent of the
@@ -154,6 +161,26 @@ async fn main() {
         "name": SESSION_NAME,
         "pin": pin,
     }));
+
+    // F-R7 broadcast tap (see header): peer intents land via the LAN bridge
+    // and never pass through the stdin loop below, so without this the live
+    // lane cannot observe them. Lag only drops prints — the bridge's own
+    // lag-recovery is unaffected; Closed ends the task with the session.
+    let mut bcast_rx = svc.subscribe();
+    tokio::spawn(async move {
+        loop {
+            match bcast_rx.recv().await {
+                Ok(pf2e_companion_lib::session::doc::SessionEvent::Patch(event)) => {
+                    out_line(&json!({ "type": "bcast", "event": event }));
+                }
+                Ok(pf2e_companion_lib::session::doc::SessionEvent::Presence(_)) => {}
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    eprintln!("bcast tap lagged by {n}; continuing");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
 
     // NDJSON intent loop. Stdin EOF (harness close) exits the process,
     // which drops the listener and frees the port.

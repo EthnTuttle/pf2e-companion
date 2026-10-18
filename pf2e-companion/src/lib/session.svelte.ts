@@ -1,5 +1,6 @@
 // Shared session state. Svelte 5 runes; mirrors llm.svelte.ts / lens.svelte.ts shape.
-import type { SessionInfo, SessionSnapshot, PatchEvent, PresenceEvent, Token, Grid, ChatEntry } from "$lib/ipc";
+import type { SessionInfo, SessionSnapshot, PatchEvent, PresenceEvent, Token, Grid, ChatEntry, Intent } from "$lib/ipc";
+import type { Transport } from "$lib/transport";
 
 export const sessionState = $state({
   info: null as SessionInfo | null,
@@ -9,7 +10,7 @@ export const sessionState = $state({
   error: null as string | null,
   connectionState: "offline" as "offline" | "connecting" | "connected" | "reconnecting" | "failed",
   reconnectAttempt: 0,
-  transport: null as { retryConnection: () => Promise<void>; close: () => Promise<void> } | null,
+  transport: null as Transport | null,
 });
 
 /** Apply a single PatchEvent to the session snapshot (reducer). */
@@ -106,15 +107,18 @@ export function applyPresence(event: PresenceEvent): void {
 }
 
 /** Send an intent through the transport. */
-export function createSendIntent(transport: { send: (intent: unknown) => Promise<void> }) {
-  return async (intent: unknown) => {
+export function createSendIntent(transport: { send: (intent: Intent) => Promise<void> }) {
+  return async (intent: Intent) => {
     sessionState.error = null;
     await transport.send(intent);
   };
 }
 
-/** Set the transport for reconnection handling. */
-export function setTransport(transport: { retryConnection: () => Promise<void>; close: () => Promise<void> } | null) {
+/** Set the transport for reconnection handling and cross-route adoption
+ *  (F-R7): the lobby connects the transport on host/ticket/resume and the
+ *  play page adopts it when init() early-returns, so outbound sends ride
+ *  the same backend the patches arrive on. */
+export function setTransport(transport: Transport | null) {
   sessionState.transport = transport;
 }
 

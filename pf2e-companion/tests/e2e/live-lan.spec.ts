@@ -14,13 +14,13 @@
 // public line renders, the secret roll's patch was already applied.
 //
 // App-truth adaptations (full prose in PLAN §9, 12.3 note):
-// - L1's "send a chat": the play page's outbound sessionIntent is the
-//   ipc.ts invoke — on a wsTransport page that seam is UNWIRED today
-//   (wsTransport.send has no caller, same seam class as S24's resume). L1
-//   therefore asserts the outbound intent SHAPE via the mock invocation log
-//   (`session_intent` stubbed {ok:null}), then drives the identical chat
-//   through the real server as GM and asserts the broadcast renders — the
-//   receive path is fully live end-to-end.
+// - L1's chat leg: pre-F-R7 this was a mock invocation-log shape assertion,
+//   because the play page's outbound seam was the ipc.ts invoke — UNWIRED on
+//   a wsTransport page (wsTransport.send had no caller; the documented F-R7
+//   dead seam). Post-F-R7 every send rides the real transport, so the
+//   composer's Enter round-trips peer → bridge → authority → broadcast →
+//   this same DOM; L1 asserts that echo, and L6 pins the GM-side pickup via
+//   the e2e_host bcast tap plus the §4.4 role gate.
 // - L3's "no secret-roll entry": the real authority DOES broadcast a
 //   number-less placeholder entry ("(secret GM roll)", roll null —
 //   phase10_table_demo.rs pins this server-side). The player-visible
@@ -33,7 +33,7 @@
 //   present. L5 therefore runs with `tauri: true` (the shell class that
 //   failed natively) and drives TWO entry flows through the one button.
 import { expect, test, type Page } from "@playwright/test";
-import { expectIntents, installHarness } from "./helpers/harness";
+import { installHarness, shot } from "./helpers/harness";
 import {
   liveLaneEnabled,
   spawnLiveHost,
@@ -62,15 +62,14 @@ test.describe("@live LAN loopback lane (PF2E_E2E_LAN=1)", () => {
   /**
    * Join a player page over the real wsTransport and await the full
    * welcome → snapshot arrival (h1 adopts the live session name; Player
-   * badge; zero error banners). Stubs: base layout boot + the play page's
-   * unwired outbound session_intent ({ok:null} records, never throws) —
-   * `tauri:false` leaves __TAURI_INTERNALS__ unset (PLAN §3.4).
+   * badge; zero error banners). Stubs: base layout boot only —
+   * `tauri:false` leaves __TAURI_INTERNALS__ unset (PLAN §3.4), and
+   * post-F-R7 there is deliberately NO session_intent stub: a regression
+   * that sends over IPC on a ws-joined page now fails loudly ("harness:
+   * no stub for …") instead of being silently absorbed.
    */
   async function joinPlayer(page: Page) {
-    await installHarness(page, {
-      tauri: false,
-      session_intent: { ok: null },
-    });
+    await installHarness(page, { tauri: false });
     await page.goto(host!.playerUrl(fixturePlayerName));
     await expect(
       page.getByRole("heading", { level: 1, name: host!.sessionName }),
@@ -96,9 +95,11 @@ test.describe("@live LAN loopback lane (PF2E_E2E_LAN=1)", () => {
     await expect(page.locator(".party-panel")).toContainText(fixtureGmName);
     await expect(page.locator(".party-panel")).toContainText(fixturePlayerName);
 
-    // Chat leg (see header note): back to Chat+Dice — the input renders only
-    // in the active tab's panel. The page's submit produces the exact
-    // §4.3 intent shape (mock invocation log), with no optimistic echo…
+    // Chat leg, post-F-R7 (see header note): back to Chat+Dice — the input
+    // renders only in the active tab's panel. The composer's Enter now rides
+    // the real wsTransport: the bridge applies this PEER chat and the
+    // broadcast echoes it back onto this same DOM. No optimistic echo is
+    // involved — what renders is the server's round trip.
     await page
       .locator(".play-tabs")
       .getByRole("tab", { name: "Chat+Dice", exact: true })
@@ -107,15 +108,14 @@ test.describe("@live LAN loopback lane (PF2E_E2E_LAN=1)", () => {
     const chatInput = page.getByPlaceholder("Type a message or /roll 1d20+7");
     await chatInput.fill(chatText);
     await chatInput.press("Enter");
-    await expectIntents(page, "chat", { text: chatText });
-    await expect(page.locator(".chat-log .msg")).toHaveCount(0);
+    await expect(page.locator(".chat-log .msg")).toHaveCount(1, LIVE);
+    await expect(page.locator(".chat-log .msg .text").first()).toHaveText(chatText);
 
-    // …and the same chat applied by the real GM authority broadcasts back
-    // over the wire and renders exactly once.
+    // GM→player leg unchanged: a GM-applied chat renders exactly once more.
     const events = await host!.gmIntent({ kind: "chat", text: chatText });
     expect(events.filter((e) => e.kind === "chat_appended")).toHaveLength(1);
-    await expect(page.locator(".chat-log .msg")).toHaveCount(1, LIVE);
-    await expect(page.locator(".chat-log .msg .text")).toHaveText(chatText);
+    await expect(page.locator(".chat-log .msg")).toHaveCount(2, LIVE);
+    await expect(page.locator(".chat-log .msg .text").nth(1)).toHaveText(chatText);
   });
 
   test("L2 wrong-pin-rejected", async ({ page }) => {
@@ -230,7 +230,7 @@ test.describe("@live LAN loopback lane (PF2E_E2E_LAN=1)", () => {
     await expect(page.locator(".party-panel")).toContainText(fixturePlayerName);
 
     // Live GM→player data flow after the button-join (L1's receive half;
-    // the page's outbound seam stays the known-unwired one — L1 note, F-R7).
+    // the outbound half of this same seam is L6's job — F-R7, now pinned).
     await page
       .locator(".play-tabs")
       .getByRole("tab", { name: "Chat+Dice", exact: true })
@@ -266,5 +266,97 @@ test.describe("@live LAN loopback lane (PF2E_E2E_LAN=1)", () => {
       .getByRole("tab", { name: "Party", exact: true })
       .click();
     await expect(page.locator(".party-card")).toHaveCount(2, LIVE);
+  });
+
+  test("L6 peer-outbound-chat", async ({ page }) => {
+    test.setTimeout(120_000);
+    await joinPlayer(page);
+
+    // (a) Real composer send: the player's chat rides the real wsTransport
+    // as a §4.3 intent frame; the bridge applies it as Role::Player and the
+    // broadcast tap proves the GM side picked it up (the tap's matcher is
+    // armed BEFORE the send — stdout lines are only matched while awaited).
+    const chatInput = page.getByPlaceholder("Type a message or /roll 1d20+7");
+    const chatText = "peer outbound on the wire";
+    const appliedPromise = host!.waitForBroadcast(
+      (e) => e.kind === "chat_appended" && e.entry?.text === chatText,
+      "the peer's chat_appended on the GM-side broadcast tap",
+    );
+    await chatInput.fill(chatText);
+    await chatInput.press("Enter");
+    const applied = await appliedPromise;
+    expect(applied.entry?.kind).toBe("chat");
+
+    // …and the same broadcast echoes the line onto the sender's own DOM —
+    // the round trip that was a dead end on device (ui-reviews A6/F-R7).
+    await expect(page.locator(".chat-log .msg")).toHaveCount(1, LIVE);
+    await expect(page.locator(".chat-log .msg .text")).toHaveText(chatText);
+    await shot(page, "live-lan/06-peer-outbound-chat");
+
+    // (b) Role gate on the same real bridge (§4.4 trust model): a state
+    // intent from a LAN peer is refused by authorize(Role::Player). The
+    // page itself exposes NO player-reachable state-intent control (all
+    // isGm-gated), so this leg drives the wire straight from the page — a
+    // second real browser WebSocket against the real host, mirroring
+    // phase10_lan.rs wrong_authority_intent_gets_error_and_state_unchanged.
+    const rejection = await page.evaluate(
+      async ({ port, sessionId, pin }) => {
+        return await new Promise<{
+          message: string;
+          rejectedKind: string | null;
+        } | null>((resolve) => {
+          const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/${sessionId}`);
+          const timer = setTimeout(() => resolve(null), 10_000);
+          ws.onopen = () => {
+            ws.send(
+              JSON.stringify({
+                type: "hello",
+                session_id: sessionId,
+                name: "Rebel",
+                pin,
+              }),
+            );
+          };
+          ws.onmessage = (ev) => {
+            const frame = JSON.parse(String(ev.data)) as {
+              type: string;
+              message?: string;
+              rejected_intent?: { kind?: string };
+            };
+            if (frame.type === "welcome") {
+              ws.send(
+                JSON.stringify({
+                  type: "intent",
+                  intent: { kind: "set_initiative", order: ["sneaky"] },
+                }),
+              );
+            }
+            if (frame.type === "error") {
+              clearTimeout(timer);
+              ws.close();
+              resolve({
+                message: String(frame.message),
+                rejectedKind: frame.rejected_intent?.kind ?? null,
+              });
+            }
+          };
+          ws.onerror = () => {
+            clearTimeout(timer);
+            resolve(null);
+          };
+        });
+      },
+      { port: host!.port, sessionId: host!.sessionId, pin: host!.pin },
+    );
+    expect(
+      rejection,
+      "the bridge must answer a peer's set_initiative with an error frame",
+    ).not.toBeNull();
+    expect(rejection!.message).toContain("GM");
+    expect(rejection!.rejectedKind).toBe("set_initiative");
+    // The rejection went to the SENDER only: the joined player's DOM is
+    // untouched (still exactly the one echoed chat line from leg (a)).
+    await expect(page.locator(".chat-log .msg")).toHaveCount(1);
+    await expect(page.locator(".session-error-banner")).toHaveCount(0);
   });
 });

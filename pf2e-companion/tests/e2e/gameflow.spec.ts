@@ -546,15 +546,16 @@ test("S22 initiative-advance", async ({ browser }) => {
     await gmPage.getByRole("button", { name: "▶ Next Turn" }).click();
 
     // Sending side: exact intent sequence — two set_initiative (the second
-    // cumulative), then advance_initiative.
-    const kinds = (await invocations(gmPage))
-      .filter((r) => r.cmd === "session_intent")
-      .map((r) => (r.args as { intent: Intent }).intent.kind);
-    expect(kinds).toEqual([
-      "set_initiative",
-      "set_initiative",
-      "advance_initiative",
-    ]);
+    // cumulative), then advance_initiative. Bounded poll, not a one-shot
+    // read: with F-R7 the record lands a transport promise-chain after the
+    // click (see expectIntents' note in helpers/harness.ts).
+    await expect
+      .poll(async () =>
+        (await invocations(gmPage))
+          .filter((r) => r.cmd === "session_intent")
+          .map((r) => (r.args as { intent: Intent }).intent.kind),
+      )
+      .toEqual(["set_initiative", "set_initiative", "advance_initiative"]);
     await expectIntents(gmPage, "set_initiative", {
       order: [fixturePlayerPeerId, fixtureGmPeerId],
     });

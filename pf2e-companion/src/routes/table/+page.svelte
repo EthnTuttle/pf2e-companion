@@ -14,7 +14,7 @@
   import { lensState } from "$lib/lens.svelte";
   import { buildInviteUri, inviteFromLobbyQuery } from "$lib/deeplink";
   import { createTransport } from "$lib/transport";
-  import { sessionState, resetSession, applyPatch, applyPresence } from "$lib/session.svelte";
+  import { sessionState, resetSession, applyPatch, applyPresence, setTransport } from "$lib/session.svelte";
   import { describeSavedSession, exportSessionLogViaDialog } from "$lib/savedSessions.svelte";
 
   let playerName = $state("");
@@ -82,6 +82,9 @@
       await transport.connect();
       transport.onPatch(applyPatch);
       transport.onPresence(applyPresence);
+      // F-R7: stash the live transport so the play page's early-return init
+      // can adopt it for outbound sends (same backend, same backend only).
+      setTransport(transport);
 
       goto("/table/play");
     } catch (e) {
@@ -145,6 +148,9 @@
       await transport.connect();
       transport.onPatch(applyPatch);
       transport.onPresence(applyPresence);
+      // F-R7: stash the live transport so the play page's early-return init
+      // can adopt it for outbound sends (same backend, same backend only).
+      setTransport(transport);
 
       goto("/table/play");
     } catch (e) {
@@ -172,6 +178,9 @@
       await transport.connect();
       transport.onPatch(applyPatch);
       transport.onPresence(applyPresence);
+      // F-R7: stash the live transport so the play page's early-return init
+      // can adopt it for outbound sends (same backend, same backend only).
+      setTransport(transport);
 
       goto("/table/play");
     } catch (e) {
