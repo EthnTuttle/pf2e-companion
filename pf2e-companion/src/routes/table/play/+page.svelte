@@ -505,7 +505,12 @@
                 title="Quick roll (Enter to roll)"
               />
               <label class="secret-chk">
-                <input type="checkbox" bind:value={diceSecret} />
+                <!-- F-R3: checkbox must use bind:checked (bind:value on a
+                     checkbox throws bind_invalid_checkbox_value in Svelte dev
+                     mode and aborts the play-page mount — this made the lobby
+                     "Enter Table" anchor a no-op on the native desktop shell.
+                     boolean semantics unchanged: rollDice(..., diceSecret) reads the same $state. -->
+                <input type="checkbox" bind:checked={diceSecret} />
                 Secret
               </label>
             </div>

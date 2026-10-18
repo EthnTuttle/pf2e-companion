@@ -119,6 +119,25 @@ test("S27 mobile-pass", async ({ page }) => {
   // the host→play→lobby round-trip — restore §4's PIN assertion here when a
   // share surface lands.
   await expect(page.locator(".invite")).toHaveCount(0);
+  // F-R6 (ui-review 2026-10-18): the Join submit must sit fully above the
+  // fixed tab-bar at rest (scroll 0) — mirror of stop 3's F1 composer check
+  // (1px tolerance). Regression guard for the native-lobby occlusion: the
+  // button's natural spot (doc y≈963–1003 at 390×867) is under the tabbar's
+  // top edge (814.8) until the pinned-CTA rule lifts it.
+  {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const joinBox = await page
+      .locator('.join-form button[type="submit"]')
+      .boundingBox();
+    const tabbarBox = await page.locator("nav.tabbar").boundingBox();
+    if (!joinBox) throw new Error("stop 2 lobby: join button not laid out");
+    if (!tabbarBox) throw new Error("stop 2 lobby: tab-bar not laid out");
+    expect(
+      joinBox.y + joinBox.height,
+      `stop 2 lobby: join button bottom (${joinBox.y + joinBox.height}) ` +
+        `above tab-bar top (${tabbarBox.y}) — F-R6 overlap`,
+    ).toBeLessThanOrEqual(tabbarBox.y + 1);
+  }
   await expectMobileChrome(page, "stop 2 lobby");
   await shot(page, "mobile/02-lobby-invite");
 
