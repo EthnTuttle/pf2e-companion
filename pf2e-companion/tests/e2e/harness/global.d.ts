@@ -35,6 +35,24 @@ interface Window {
     reset(): void;
   };
   /**
+   * The deterministic WS-lane mock (F-R7; tests/e2e/helpers/wsBridge.ts).
+   * Present only after `installWsMock(page)` — it replaces window.WebSocket
+   * with a recording mock so a `tauri:false` page's REAL wsTransport can
+   * complete its handshake against the test-as-authority.
+   */
+  __pf2eWs?: {
+    /** Every frame the page's wsTransport sent, raw JSON, oldest first. */
+    sent: string[];
+    /**
+     * Push one host→client frame through the page's wsTransport (the mock's
+     * `onmessage`). Mirrors `HostFrame`'s serde: patch/presence frames carry
+     * the event fields flattened beside `type` (src-tauri/src/lan.rs).
+     */
+    deliver(frame: unknown): void;
+    /** URL the page dialed (the `/ws/`-prefixed wire form), or null pre-connect. */
+    lastUrl(): string | null;
+  };
+  /**
    * NOTE: `__TAURI_INTERNALS__` (PLAN §3.2 point 1) is deliberately NOT
    * declared here. src/lib/transport.ts and src/lib/transport.test.ts carry
    * `@ts-expect-error` directives that require the property to stay untyped;

@@ -2,8 +2,8 @@
   import { onMount, onDestroy } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { sessionIntent, type Intent, type Token, type Grid, type CharacterSheet, type RollRecord } from "$lib/ipc";
-  import { sessionState, applyPatch, applyPresence, resetSession, clearError, setTransport, setConnectionState, retryConnection, getMyPeerId, getMyRole, getIsGm, getMyPlayer, getActiveInitiativePeer, getChatEntries, getTokens, getVisibleHandouts, getGrid } from "$lib/session.svelte";
+  import { type Intent, type Token, type Grid, type CharacterSheet, type RollRecord } from "$lib/ipc";
+  import { sessionState, applyPatch, applyPresence, resetSession, clearError, setTransport, setConnectionState, retryConnection, getMyPeerId, getMyRole, getIsGm, getMyPlayer, getActiveInitiativePeer, getChatEntries, getTokens, getVisibleHandouts, getGrid, createSendIntent } from "$lib/session.svelte";
   import { createTransport } from "$lib/transport";
   import { lensState } from "$lib/lens.svelte";
   import EntityImage from "$lib/EntityImage.svelte";
@@ -48,13 +48,27 @@
     { id: "gm", icon: "🔧", label: "GM", gmOnly: true },
   ] as const;
 
+  // F-R7: outbound intents ride the transport (wsTransport serializes §4.3
+  // "intent" frames; ipcTransport calls session_intent itself) — NOT ipc.ts
+  // directly. On a ws-joined page there is no session_intent IPC behind this
+  // session, so every send must go through transport.send. Call sites stay
+  // fire-and-forget; transport-level failures surface in the same error
+  // banner the bridge's `error` frames already use.
+  function sendIntent(intent: Intent): void {
+    const t = transport;
+    if (!t) return;
+    void createSendIntent(t)(intent).catch((e: unknown) => {
+      sessionState.error = e instanceof Error ? e.message : String(e);
+    });
+  }
+
   function rollDice(expr: string, secret = false) {
-    sessionIntent({ kind: "roll_dice", expr, secret } as Intent);
+    sendIntent({ kind: "roll_dice", expr, secret } as Intent);
   }
 
   function sendChat() {
     if (!chatDraft.trim()) return;
-    sessionIntent({ kind: "chat", text: chatDraft.trim() } as Intent);
+    sendIntent({ kind: "chat", text: chatDraft.trim() } as Intent);
     chatDraft = "";
   }
 
@@ -102,19 +116,19 @@
   }
 
   function advanceInitiative() {
-    sessionIntent({ kind: "advance_initiative" } as Intent);
+    sendIntent({ kind: "advance_initiative" } as Intent);
   }
 
   function setInitiativeOrder(order: string[]) {
-    sessionIntent({ kind: "set_initiative", order } as Intent);
+    sendIntent({ kind: "set_initiative", order } as Intent);
   }
 
   function revealHandout(handoutId: string) {
-    sessionIntent({ kind: "reveal_handout", handout_id: handoutId } as Intent);
+    sendIntent({ kind: "reveal_handout", handout_id: handoutId } as Intent);
   }
 
   function loadAdventure(slug: string = "widows-lamp") {
-    sessionIntent({ kind: "load_adventure", slug } as Intent);
+    sendIntent({ kind: "load_adventure", slug } as Intent);
   }
 
   function handleLoadAdventureClick(_e?: MouseEvent) {
@@ -123,7 +137,7 @@
 
   function endSession(_e?: MouseEvent) {
     if (confirm("End this session for everyone? Export the session log first if you want a transcript.")) {
-      sessionIntent({ kind: "end_session" } as Intent);
+      sendIntent({ kind: "end_session" } as Intent);
     }
   }
 
@@ -159,7 +173,7 @@
         conditions: [],
         notes: "",
       };
-      sessionIntent({
+      sendIntent({
         kind: "create_character",
         name: sessionState.info?.name ?? "Player",
         color: "#3b82f6",
@@ -169,7 +183,7 @@
   }
 
   function updateSheet(patch: Partial<CharacterSheet>) {
-    sessionIntent({ kind: "update_sheet", patch } as Intent);
+    sendIntent({ kind: "update_sheet", patch } as Intent);
   }
 
   function addToken() {
@@ -183,12 +197,12 @@
       y: Math.floor(grid.h / 2),
       label: "Token",
     };
-    sessionIntent({ kind: "add_token", token } as Intent);
+    sendIntent({ kind: "add_token", token } as Intent);
   }
 
   function removeToken(tokenId: string) {
     if (!isGm) return;
-    sessionIntent({ kind: "remove_token", token_id: tokenId } as Intent);
+    sendIntent({ kind: "remove_token", token_id: tokenId } as Intent);
   }
 
   function handleTokenMouseDown(token: Token, e: MouseEvent) {
@@ -212,7 +226,7 @@
     const clampedX = Math.max(0, Math.min(grid.w - 1, x));
     const clampedY = Math.max(0, Math.min(grid.h - 1, y));
     if (clampedX !== draggingToken.x || clampedY !== draggingToken.y) {
-      sessionIntent({ kind: "move_token", token_id: draggingToken.token_id, x: clampedX, y: clampedY } as Intent);
+      sendIntent({ kind: "move_token", token_id: draggingToken.token_id, x: clampedX, y: clampedY } as Intent);
     }
   }
 
@@ -222,7 +236,7 @@
 
   function setSceneBackground(entityId: string | null) {
     if (!isGm) return;
-    sessionIntent({ kind: "set_scene", grid: { ...grid }, background_entity_id: entityId } as Intent);
+    sendIntent({ kind: "set_scene", grid: { ...grid }, background_entity_id: entityId } as Intent);
   }
 
   function handleGmDrawerSubmit(e: Event) {
@@ -230,7 +244,7 @@
     if (gmDrawerInput.trim().startsWith("/roll ")) {
       rollDice(gmDrawerInput.trim().slice(6), true);
     } else {
-      sessionIntent({ kind: "chat", text: gmDrawerInput.trim() } as Intent);
+      sendIntent({ kind: "chat", text: gmDrawerInput.trim() } as Intent);
     }
     gmDrawerInput = "";
   }
@@ -241,7 +255,7 @@
       if (gmDrawerInput.trim().startsWith("/roll ")) {
         rollDice(gmDrawerInput.trim().slice(6), true);
       } else {
-        sessionIntent({ kind: "chat", text: gmDrawerInput.trim() } as Intent);
+        sendIntent({ kind: "chat", text: gmDrawerInput.trim() } as Intent);
       }
       gmDrawerInput = "";
     }
@@ -277,7 +291,15 @@
   let gmDiceExpr = $state("");
 
   async function init() {
-    if (sessionState.connected && sessionState.info) return;
+    if (sessionState.connected && sessionState.info) {
+      // Lobby-first flow (host / ticket join / resume): the lobby already
+      // connected a transport, attached the patch/presence handlers, and
+      // stashed it (setTransport) — adopt it so this page's sends ride the
+      // SAME backend the patches arrive on. A page that invents a second
+      // backend here is exactly the F-R7 bug class.
+      transport = sessionState.transport;
+      return;
+    }
 
     const params = new URLSearchParams(page.url.search);
     const name = params.get("name") ?? localStorage.getItem("pf2e.playerName") ?? "Player";

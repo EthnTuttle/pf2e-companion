@@ -116,21 +116,30 @@ export async function invocations(page: Page): Promise<InvocationRecord[]> {
  * Assert the page recorded at least one `session_intent` call whose intent
  * has `kind` and matches `matcher` (objectContaining). E.g.
  * `expectIntents(page, "roll_dice", { expr: "1d20+7" })`.
+ *
+ * Bounded poll, not a one-shot read: post-F-R7 the play page's sends ride
+ * the transport promise chain (click → transport.send → dynamic import →
+ * invoke), so the record lands a task-hop after the action resolves — the
+ * same readiness-probe class as waitForListener (PLAN §3.2).
  */
 export async function expectIntents(
   page: Page,
   kind: Intent["kind"],
   matcher: Record<string, unknown> = {},
 ): Promise<void> {
-  const matching = (await invocations(page))
-    .filter((r) => r.cmd === "session_intent")
-    .map((r) => (r.args as { intent: Intent }).intent)
-    .filter((i) => i.kind === kind);
-  expect(
-    matching,
-    `expected ≥1 session_intent of kind "${kind}"; got none`,
-  ).not.toHaveLength(0);
-  expect(matching).toContainEqual(expect.objectContaining(matcher));
+  const matchingIntents = async () =>
+    (await invocations(page))
+      .filter((r) => r.cmd === "session_intent")
+      .map((r) => (r.args as { intent: Intent }).intent)
+      .filter((i) => i.kind === kind);
+  await expect
+    .poll(async () => (await matchingIntents()).length, {
+      message: `expected ≥1 session_intent of kind "${kind}"; got none`,
+    })
+    .toBeGreaterThan(0);
+  expect(await matchingIntents()).toContainEqual(
+    expect.objectContaining(matcher),
+  );
 }
 
 /**

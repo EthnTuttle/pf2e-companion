@@ -147,6 +147,44 @@ describe("wsTransport error frame after connect", () => {
     expect(errorMsgs).toHaveLength(1);
     expect(errorMsgs[0]).toBe("Forbidden: GM only");
   });
+
+  // F-R7: the hand-built "intent frame structure" test never called send() —
+  // this pins the actual serialization the bridge parses (lan.rs ClientFrame).
+  test("send serializes a §4.3 intent frame on the open socket", async () => {
+    const { wsTransport } = await import("./transport");
+
+    const transport = wsTransport("ws://localhost:1234/session/abc", "TestPlayer");
+    const connectPromise = transport.connect();
+    await Promise.resolve();
+    mockWs.onopen?.(); // flushes the hello frame
+    mockWs.onmessage?.({ data: JSON.stringify({ type: "welcome" }) });
+    await connectPromise;
+
+    const intent: Intent = { kind: "chat", text: "over the real seam" };
+    await transport.send(intent);
+
+    const frames = mockWs.send.mock.calls.map((c: unknown[]) =>
+      JSON.parse(String(c[0])),
+    );
+    expect(frames).toContainEqual({
+      type: "hello",
+      session_id: "session/abc", // everything after the /ws/ prefix
+      name: "TestPlayer",
+    });
+    expect(frames).toContainEqual({ type: "intent", intent });
+  });
+
+  // F-R7 UX: a send on a dead socket is a loud rejection — the play page
+  // routes it into the session banner (wsTransport reconnect pins cover the
+  // reconnect half).
+  test("send rejects when the socket is not open", async () => {
+    const { wsTransport } = await import("./transport");
+
+    const transport = wsTransport("ws://localhost:1234/session/abc", "TestPlayer");
+    await expect(
+      transport.send({ kind: "chat", text: "x" }),
+    ).rejects.toThrow("WebSocket not connected");
+  });
 });
 
 describe("wsTransport reconnect state machine", () => {

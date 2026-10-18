@@ -60,6 +60,14 @@ export interface LiveHost {
    *  apply produced (rejects with the authority error message on failure).
    *  Bounded wait; serialize calls — the protocol is one ack per intent. */
   gmIntent(intent: Intent): Promise<LivePatchEvent[]>;
+  /** Await one broadcast-tap ("bcast") patch line whose event matches `pred`
+   *  — the F-R7 addition that makes PEER-applied effects (arriving over the
+   *  real WS bridge, never through stdin) observable on the GM side. Bounded
+   *  at 15 s. Nothing is consumed or buffered unless a test awaits one. */
+  waitForBroadcast(
+    pred: (event: LivePatchEvent) => boolean,
+    what: string,
+  ): Promise<LivePatchEvent>;
   /** Close stdin (the example exits on EOF, freeing the port); bounded. */
   close(): Promise<void>;
 }
@@ -213,6 +221,17 @@ export async function spawnLiveHost(opts?: { pin?: string }): Promise<LiveHost> 
     );
   }
 
+  function waitForBroadcast(
+    pred: (event: LivePatchEvent) => boolean,
+    what: string,
+  ): Promise<LivePatchEvent> {
+    return waitFor<LivePatchEvent>((line) => {
+      if (line.type !== "bcast") return null;
+      const event = line.event as LivePatchEvent;
+      return pred(event) ? event : null;
+    }, 15_000, what);
+  }
+
   async function close(): Promise<void> {
     if (exited !== null) return;
     // Stdin EOF is the example's orderly shutdown: its intent loop breaks,
@@ -239,6 +258,7 @@ export async function spawnLiveHost(opts?: { pin?: string }): Promise<LiveHost> 
     pin: ready.pin,
     playerUrl,
     gmIntent,
+    waitForBroadcast,
     close,
   };
 }
