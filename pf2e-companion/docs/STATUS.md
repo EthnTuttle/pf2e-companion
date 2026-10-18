@@ -45,12 +45,33 @@ Tag `v0.1.0` pushed to the fork fires `.github/workflows/release.yml` →
 Release with deb/AppImage/msi/dmg assets. Unsigned: friends need the
 first-launch bypass clicks documented in README → Install.
 
-## Next up (unchanged): Tier 1 item 1 — real-device evening
+## Next up: fix the real-device findings (Tier 1 item 1 executed 2026-10-18)
 
-The only remaining Tier 1 item, human-only: Android sim + real phone browser
-on live LAN + P2P join + avatars/lens/camera + **deep-link tap-through on a
-real device** (the `pf2e://` event path is not e2e-coverable; unit tests only).
-Open with the checklist in `docs/SHIPPING.md` and `docs/ui-reviews/README.md`.
+Tier 1 item 1 (real-device evening) is DONE as a test-and-document pass — full
+verdicts, exact error strings, and evidence filenames in
+`docs/ui-reviews/2026-10-18-real-device.md`. Headline: the device story is
+90% real — debug APK builds/installs first-try, `pf2e://` tap-through prefills
+hot and cold, first-run wizard renders, and a real desktop host (Xvfb
+WebKitGTK) accepted a real phone over true Wi-Fi. But three things must be
+fixed before friends beta, in this order:
+
+1. **F-R1 (blocker)** — `session_join_lan` IPC command does not exist in
+   `src-tauri` (its only implementation is the e2e mock). Browser Join shows a
+   raw `TypeError`; native deep-link join says "Command session_join_lan not
+   found". Implement the Rust WS-client actor bridging onto the existing
+   `session:patch`/`session:presence` events.
+2. **F-R2 (blocker on VPN'd hosts)** — `local_lan_ip()`'s 8.8.8.8 UDP probe
+   followed the Mullvad tunnel and advertised `ws://10.146.185.179:4780/…`
+   (tunnel /32) instead of `192.168.1.172`; phone needed a hand-corrected URL.
+   Enumerate non-tunnel interfaces / show all candidates / allow override.
+3. **F-R3 (verify before shipping desktop bundle)** — GM "Enter Table →"
+   anchor does not navigate on the WebKitGTK dev build (pointer AND keyboard,
+   focus-ring-verified; same-page buttons work; route proven from the phone).
+   Reproduce with `WEBKIT_INSPECTOR_SERVER=127.0.0.1:9223`.
+
+Secondary: F-R6 lobby "Join Session" button partially under the fixed tabbar
+on native at 390px (F1 fix itself verified GOOD on the play surface), F-R7
+phone→GM chat seam (known, matches `live-lan.spec.ts` header note).
 
 ## Sandbox quirks ledger
 

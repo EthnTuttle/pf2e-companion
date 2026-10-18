@@ -21,3 +21,6 @@ tools/imagery/review.html
 
 # UI-shots harness (e2e/shots.ts — phase 15)
 shots/
+
+# Real-device lab evidence (device screencaps; regenerable)
+device-lab/
