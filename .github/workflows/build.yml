@@ -9,7 +9,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  PNPM_VERSION: 11
+  PNPM_VERSION: 11.6.0
 
 jobs:
   test:
@@ -23,7 +23,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: pf2e-companion/pnpm-lock.yaml
       - uses: Swatinem/rust-cache@v2
@@ -85,7 +85,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: pf2e-companion/pnpm-lock.yaml
       - uses: Swatinem/rust-cache@v2
@@ -115,7 +115,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: pf2e-companion/pnpm-lock.yaml
       - uses: Swatinem/rust-cache@v2
@@ -173,7 +173,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: pf2e-companion/pnpm-lock.yaml
       - uses: Swatinem/rust-cache@v2
@@ -202,7 +202,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: pf2e-companion/pnpm-lock.yaml
 
