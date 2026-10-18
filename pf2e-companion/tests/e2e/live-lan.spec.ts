@@ -26,6 +26,12 @@
 //   phase10_table_demo.rs pins this server-side). The player-visible
 //   secrecy guarantee is that expr+total never leak; L3 pins exactly that,
 //   plus the placeholder as the only roll-kind entry.
+// - L5 (F-R1): the lobby's Join button is the path BOTH real-device failures
+//   took (browser typed entry, native deep-link prefill). No LAN-join IPC
+//   exists — the lobby hands the credentials to /table/play as ?host=
+//   params and createTransport picks wsTransport even with Tauri internals
+//   present. L5 therefore runs with `tauri: true` (the shell class that
+//   failed natively) and drives TWO entry flows through the one button.
 import { expect, test, type Page } from "@playwright/test";
 import { expectIntents, installHarness } from "./helpers/harness";
 import {
@@ -181,5 +187,84 @@ test.describe("@live LAN loopback lane (PF2E_E2E_LAN=1)", () => {
       "widows-lamp",
       LIVE,
     );
+  });
+
+  test("L5 join-via-lobby-button", async ({ page }) => {
+    test.setTimeout(120_000);
+    // F-R1 regression pin — REAL Join-button clicks against the REAL Rust
+    // LAN server, with Tauri internals PRESENT (tauri: true): the exact
+    // shell class in which the native deep-link join died on device, and
+    // the case createTransport's host-param-first rule exists for. No
+    // session_join_* IPC is stubbed or expected — there is none to call.
+    await installHarness(page);
+    const lanUrl = `ws://127.0.0.1:${host!.port}/${host!.sessionId}`;
+
+    // ── Leg 1: typed entry (device lanes A/B8 typed equivalent) ──────────
+    await page.goto("/table");
+    await page.getByLabel("Name", { exact: true }).fill(fixturePlayerName);
+    await page.getByRole("button", { name: "LAN URL", exact: true }).click();
+    await page.getByLabel("Host LAN URL", { exact: true }).fill(lanUrl);
+    await page
+      .getByLabel("Table PIN (6 chars)", { exact: true })
+      .fill(host!.pin.toLowerCase()); // lobby must normalize to uppercase
+    await page.getByRole("button", { name: "Join Session" }).click();
+
+    // Identical end state to the direct-URL path (L1's assertion set): the
+    // h1 adopts the live session name when the snapshot patch lands.
+    await expect(page).toHaveURL(/\/table\/play\?/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: host!.sessionName }),
+    ).toBeVisible(LIVE);
+    await expect(page.locator(".badge")).toHaveText("Player", LIVE);
+    await expect(page.locator(".badge.gm")).toHaveCount(0);
+    await expect(page.locator(".error-banner")).toHaveCount(0);
+    await expect(page.locator(".session-error-banner")).toHaveCount(0);
+
+    // The roster broadcast is real: GM (boot-registered) + this join.
+    await page
+      .locator(".play-tabs")
+      .getByRole("tab", { name: "Party", exact: true })
+      .click();
+    await expect(page.locator(".party-card")).toHaveCount(2, LIVE);
+    await expect(page.locator(".party-panel")).toContainText(fixtureGmName);
+    await expect(page.locator(".party-panel")).toContainText(fixturePlayerName);
+
+    // Live GM→player data flow after the button-join (L1's receive half;
+    // the page's outbound seam stays the known-unwired one — L1 note, F-R7).
+    await page
+      .locator(".play-tabs")
+      .getByRole("tab", { name: "Chat+Dice", exact: true })
+      .click();
+    const chatText = "hello via the lobby button";
+    await host!.gmIntent({ kind: "chat", text: chatText });
+    await expect(page.locator(".chat-log .msg")).toHaveCount(1, LIVE);
+    await expect(page.locator(".chat-log .msg .text")).toHaveText(chatText);
+
+    // ── Leg 2: deep-link-prefilled lobby (device lane B4 → B8 tap) ───────
+    // The pf2e://join handler navigates to /table?join=1&url=…&pin=…; the
+    // lobby prefills and scrubs the URL. Join is the same manual button.
+    await page.goto(
+      `/table?join=1&url=${encodeURIComponent(lanUrl)}&pin=${encodeURIComponent(host!.pin)}`,
+    );
+    await expect(page.getByLabel("Host LAN URL", { exact: true })).toHaveValue(
+      lanUrl,
+    );
+    await expect(
+      page.getByLabel("Table PIN (6 chars)", { exact: true }),
+    ).toHaveValue(host!.pin);
+    await page.getByLabel("Name", { exact: true }).fill(fixturePlayerName);
+    await page.getByRole("button", { name: "Join Session" }).click();
+
+    // Same end state again; the same-name+PIN reattach keeps the roster
+    // stable at GM + player (no duplicate card).
+    await expect(
+      page.getByRole("heading", { level: 1, name: host!.sessionName }),
+    ).toBeVisible(LIVE);
+    await expect(page.locator(".badge")).toHaveText("Player", LIVE);
+    await page
+      .locator(".play-tabs")
+      .getByRole("tab", { name: "Party", exact: true })
+      .click();
+    await expect(page.locator(".party-card")).toHaveCount(2, LIVE);
   });
 });

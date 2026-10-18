@@ -109,10 +109,32 @@
           error = "Enter host LAN URL";
           return;
         }
-        const url = new URL(lanHost);
-        const sessionId = url.pathname.replace("/ws/", "").replace("/", "");
-        const { invoke } = await import("@tauri-apps/api/core");
-        info = await invoke("session_join_lan", { hostUrl: lanHost, name: playerName, sessionId, pin: lanPin.trim().toUpperCase() || null });
+        // F-R1: there is no `session_join_lan` IPC command (it only ever
+        // existed as an e2e mock). A LAN joiner is a thin WS client in EVERY
+        // shell — browser, native webview, deep-link-prefilled lobby alike —
+        // so hand the typed credentials to the play surface as `?host=` URL
+        // params; createTransport picks wsTransport for them everywhere and
+        // the play page runs the proven welcome/snapshot/error flow (L1/L2).
+        const url = new URL(lanHost.trim());
+        if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+          error = "Host URL must start with ws://";
+          return;
+        }
+        // Tolerate pastes of the wire form (`…/ws/<id>`): strip one `/ws`
+        // prefix so wsTransport re-adds exactly one.
+        if (url.pathname.startsWith("/ws/")) url.pathname = url.pathname.slice(3);
+        if (url.pathname.length > 1 && url.pathname.endsWith("/")) {
+          url.pathname = url.pathname.slice(0, -1);
+        }
+        if (url.pathname === "/" || url.pathname === "") {
+          error = "Add the session id to the end of the URL";
+          return;
+        }
+        const pin = lanPin.trim().toUpperCase();
+        const params = new URLSearchParams({ name: playerName.trim(), host: url.toString() });
+        if (pin) params.set("pin", pin);
+        goto(`/table/play?${params.toString()}`);
+        return;
       }
       sessionState.info = info;
       sessionState.connected = true;

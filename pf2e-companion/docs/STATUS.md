@@ -55,11 +55,11 @@ hot and cold, first-run wizard renders, and a real desktop host (Xvfb
 WebKitGTK) accepted a real phone over true Wi-Fi. But three things must be
 fixed before friends beta, in this order:
 
-1. **F-R1 (blocker)** — `session_join_lan` IPC command does not exist in
-   `src-tauri` (its only implementation is the e2e mock). Browser Join shows a
-   raw `TypeError`; native deep-link join says "Command session_join_lan not
-   found". Implement the Rust WS-client actor bridging onto the existing
-   `session:patch`/`session:presence` events.
+1. ~~F-R1 (blocker)~~ **FIXED on `fix-r1-join-lan`** — lobby LAN join no
+   longer IPCs: the button hands off to `/table/play?host=…` and every shell
+   (browser, native webview, deep-link prefill) joins via `wsTransport`.
+   Live lane gained L5 (real button click incl. the prefilled variant);
+   fantasy mock removed. See `docs/plans/PLAN-F-R1-join-lan.md`.
 2. **F-R2 (blocker on VPN'd hosts)** — `local_lan_ip()`'s 8.8.8.8 UDP probe
    followed the Mullvad tunnel and advertised `ws://10.146.185.179:4780/…`
    (tunnel /32) instead of `192.168.1.172`; phone needed a hand-corrected URL.
