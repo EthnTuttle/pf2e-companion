@@ -320,7 +320,7 @@
     <button type="button" class:active={joinMode === "ticket"} onclick={() => (joinMode = "ticket")}>P2P Ticket</button>
     <button type="button" class:active={joinMode === "lan"} onclick={() => (joinMode = "lan")}>LAN URL</button>
   </div>
-  <form onsubmit={handleJoin}>
+  <form class="join-form" onsubmit={handleJoin}>
     <div class="fields">
       {#if joinMode === "ticket"}
         <label>
@@ -458,6 +458,36 @@
   button.primary[disabled] {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+  /* F-R6 fix (ui-review 2026-10-18): on the native 390px viewport the lobby
+     document is ~1100px tall; the Join submit's natural spot is doc
+     y≈963–1003 — below the 867px viewport at rest, and mid-scroll inside
+     the fixed tabbar's occlusion band (tabbar top edge at 814.8, h 52.17px).
+     main's `padding-bottom: 5rem` only buys SCROLL clearance (max-scroll
+     slack vs the tabbar is a constant ≈27.8px, matching F1's 27.6px); it
+     cannot change the rest state, because content doc coords are padding-
+     independent. `position: sticky; bottom: …` is NOT viable here: sticky
+     travel is clamped to the containing block, and as the form's last child
+     the button has only its own 8px top margin of room. Fixed CTA pinned
+     above the tabbar (52px + 0.75rem) is the minimal working treatment —
+     phone widths only: at ≥520px the lobby fits or the user can scroll to
+     full clearance. The background must be opaque while pinned (stock
+     button.primary is translucent) — recipe mirrors .tabbar in layout. */
+  @media (max-width: 520px) {
+    .join-form > button[type="submit"] {
+      position: fixed;
+      left: 2rem;
+      right: 2rem;
+      bottom: calc(52px + 0.75rem);
+      z-index: 2;
+      margin-top: 0;
+      background: color-mix(in srgb, currentColor 12%, white 86%);
+    }
+  }
+  @media (max-width: 520px) and (prefers-color-scheme: dark) {
+    .join-form > button[type="submit"] {
+      background: color-mix(in srgb, currentColor 14%, black 66%);
+    }
   }
 
   .join-tabs {
