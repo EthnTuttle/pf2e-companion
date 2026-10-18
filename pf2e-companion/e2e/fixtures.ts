@@ -385,7 +385,9 @@ export const base: FixtureMap = {
   session_host: GM_INFO,
   session_load: GM_INFO,
   session_join_peer: PLAYER_INFO,
-  session_join_lan: PLAYER_INFO,
+  // F-R1: NO session_join_lan stub — the command does not exist in src-tauri;
+  // the lobby's LAN join is pure wsTransport (`?host=` handoff), so any IPC
+  // round-trip from it must throw the loud unknown-command error here.
   session_intent: null,
   session_leave: null,
   session_export_log: "/home/player/Downloads/aboleth-tide-2025-10-09.log.md",

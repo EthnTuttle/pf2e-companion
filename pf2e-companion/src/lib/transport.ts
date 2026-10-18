@@ -320,17 +320,23 @@ export function mockTransport(): Transport & {
   };
 }
 
-/** Backend selection: Tauri IPC if available, else WS from `?host=` query param. */
+/** Backend selection: an explicit `?host=` LAN target wins in EVERY shell —
+ *  the native webview can open ws:// directly (CSP null, cleartext allowed
+ *  on Android), so a LAN joiner is a thin WS client even inside the app
+ *  (F-R1). Only with no host param does Tauri IPC take over; a bare browser
+ *  with neither fails loudly. */
 export function createTransport(name: string): Transport {
-  // @ts-expect-error Tauri injects this global in desktop builds
-  if (typeof window !== "undefined" && window.__TAURI_INTERNALS__) {
-    return ipcTransport();
-  }
-  const params = new URLSearchParams(window.location.search);
-  const host = params.get("host");
-  const pin = params.get("pin");
-  if (host) {
-    return wsTransport(host, name, pin ?? undefined);
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const host = params.get("host");
+    const pin = params.get("pin");
+    if (host) {
+      return wsTransport(host, name, pin ?? undefined);
+    }
+    // @ts-expect-error Tauri injects this global in desktop builds
+    if (window.__TAURI_INTERNALS__) {
+      return ipcTransport();
+    }
   }
   throw new Error("No transport available: not in Tauri and no ?host= query param");
 }

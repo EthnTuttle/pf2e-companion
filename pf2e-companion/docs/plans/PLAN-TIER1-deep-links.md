@@ -146,3 +146,15 @@ Paths relative to repo root `pf2e-companion/`.
   ignored — navigating to the lobby would tear down the live session via
   the play page's `onDestroy`. Joining a new table requires leaving the
   current one first. Cold-start has no such guard (nothing to protect).
+
+## 6. Post-device fix (2026-10-18, F-R1)
+
+This slice's non-goal "the joiner still types their name and presses **Join
+Session**" made the prefilled lobby's Join button the whole value
+proposition — and on the real-device evening that button was dead for LAN
+joins (F-R1: `session_join_lan` never existed in src-tauri). Fixed in
+`docs/plans/PLAN-F-R1-join-lan.md`: the lobby now hands the typed/prefilled
+credentials to `/table/play?host=…` and every shell joins over `wsTransport`.
+The prefill → scrub → manual-Join flow designed here is unchanged; what
+changed is only what the button does with the fields. Live-lane leg 2 of L5
+pins this file's acceptance criterion 1 end-to-end against the real server.

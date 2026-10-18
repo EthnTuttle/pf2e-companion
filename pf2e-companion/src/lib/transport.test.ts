@@ -357,4 +357,18 @@ describe("createTransport backend selection logic", () => {
     const transport = createTransport("test");
     expect(transport.mode).toBe("ws");
   });
+
+  // F-R1: a LAN join inside the native shell navigates to
+  // /table/play?host=… — the explicit host param must win over the
+  // injected Tauri internals, or the page subscribes to IPC events no
+  // Rust-side session will ever emit.
+  test("host param wins over Tauri internals (native LAN join)", async () => {
+    // @ts-expect-error
+    globalThis.window.__TAURI_INTERNALS__ = {};
+    Object.defineProperty(globalThis.window, "location", { value: { search: "?host=ws://192.168.1.42:4780/abc123" }, writable: true, configurable: true });
+
+    const { createTransport } = await import("./transport");
+    const transport = createTransport("test");
+    expect(transport.mode).toBe("ws");
+  });
 });
