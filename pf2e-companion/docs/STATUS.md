@@ -75,6 +75,12 @@ phone→GM chat seam (known, matches `live-lan.spec.ts` header note).
 
 ## Sandbox quirks ledger
 
+- **VPN hosts (F-R2)**: the old 8.8.8.8 UDP-probe LAN-IP trick follows
+  policy routing — under Mullvad it returns the tunnel /32. Fixed by
+  interface enumeration + ranking in `src-tauri/src/lan.rs`; note that
+  `if-addrs`' POSIX `is_oper_up()` is strictly `IFF_RUNNING`, and
+  WireGuard/tun interfaces report **UP**, so up-state can never detect a
+  tunnel — the name/`/32`/CGNAT/192.168-first rules carry it.
 - **Port 4173 contention**: sibling worktrees each spawn the Vite preview on
   4173; a second `pnpm e2e` run *attaches to the foreign server* (foreign code,
   missing harness → false failures like "Cannot read properties of undefined
