@@ -15,7 +15,8 @@
     "e2e": "playwright test",
     "e2e:live": "PF2E_E2E_LAN=1 playwright test --grep @live",
     "e2e:shots": "node e2e/shots.ts",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "clean:artifacts": "rm -rf src-tauri/target/release test-results playwright-report tests/e2e/screenshots shots tools/imagery/staging tools/imagery/review.html .svelte-kit"
   },
   "license": "MIT",
   "dependencies": {

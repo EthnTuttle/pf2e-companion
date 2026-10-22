@@ -208,6 +208,11 @@ cd src-tauri && cargo test
 
 # Production build (no installer):
 pnpm tauri build --no-bundle
+
+# Reclaim disk from regenerable build/test artifacts (~4+ GB typical;
+# keeps target/debug, node_modules, device-lab — see docs/STATUS.md
+# "Local artifact footprint"):
+pnpm clean:artifacts
 ```
 
 ### Diagnostics (no telemetry)
